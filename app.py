@@ -91,27 +91,33 @@ def load_data(uploaded_file):
     # 1. Clean column names by stripping whitespace
     data.columns = data.columns.str.strip()
     
+    # Track original value column name for legend
+    original_value_column = None
+    
     # 2. Check and rename date column
     if DATE_COLUMN not in data.columns:
         if ALT_DATE_COLUMN in data.columns:
             data.rename(columns={ALT_DATE_COLUMN: DATE_COLUMN}, inplace=True)
         else:
-            return None, f"File must contain a date column named **`{DATE_COLUMN}`** or **`{ALT_DATE_COLUMN}`**."
+            return None, f"File must contain a date column named **`{DATE_COLUMN}`** or **`{ALT_DATE_COLUMN}`**.", None
 
     # 3. Check and rename value column
     if VALUE_COLUMN not in data.columns:
         if ALT_VALUE_COLUMN in data.columns:
+            original_value_column = 'received'  # Track that it was "received"
             data.rename(columns={ALT_VALUE_COLUMN: VALUE_COLUMN}, inplace=True)
         else:
-            return None, f"File must contain a value column named **`{VALUE_COLUMN}`** or **`{ALT_VALUE_COLUMN}`**."
+            return None, f"File must contain a value column named **`{VALUE_COLUMN}`** or **`{ALT_VALUE_COLUMN}`**.", None
+    else:
+        original_value_column = 'raised'  # Track that it was "raised"
 
     try:
         data[DATE_COLUMN] = pd.to_datetime(data[DATE_COLUMN], errors='coerce')
         data.dropna(subset=[DATE_COLUMN], inplace=True)
     except Exception:
-        return None, f"Could not convert **`{DATE_COLUMN}`** to datetime format."
+        return None, f"Could not convert **`{DATE_COLUMN}`** to datetime format.", None
 
-    return data, None
+    return data, None, original_value_column
 
 @st.cache_data
 def apply_filter(df, filter_config):
@@ -160,7 +166,7 @@ def process_data(df, year_range, category_column):
     return final_data, None
 
 
-def generate_chart(final_data, category_column, show_bars, show_line, chart_title):
+def generate_chart(final_data, category_column, show_bars, show_line, chart_title, original_value_column='raised'):
     """Generates the dual-axis Matplotlib chart."""
     # Matplotlib Figure Size (Increased for resolution)
     chart_fig, chart_ax1 = plt.subplots(figsize=(20, 10)) 
@@ -348,6 +354,12 @@ def generate_chart(final_data, category_column, show_bars, show_line, chart_titl
     # Keep marker size fixed at 16 points
     LEGEND_MARKER_SIZE = 16
     
+    # Set legend label based on original column type
+    if original_value_column == 'received':
+        bar_legend_label = 'Total amount received'
+    else:  # 'raised'
+        bar_legend_label = 'Amount raised'
+    
     if show_bars:
         if category_column != 'None':
             for idx, cat in enumerate(category_cols):
@@ -356,10 +368,10 @@ def generate_chart(final_data, category_column, show_bars, show_line, chart_titl
                 legend_elements.append(Line2D([0], [0], marker='o', color='w', 
                                               markerfacecolor=color, markersize=LEGEND_MARKER_SIZE, label=cat)) 
         else:
-            # UPDATED LEGEND LABEL
+            # Use dynamic legend label
             # Use proportional marker size
             legend_elements.append(Line2D([0], [0], marker='o', color='w', 
-                                          markerfacecolor=SINGLE_BAR_COLOR, markersize=LEGEND_MARKER_SIZE, label='Total amount received')) 
+                                          markerfacecolor=SINGLE_BAR_COLOR, markersize=LEGEND_MARKER_SIZE, label=bar_legend_label)) 
             
     if show_line:
         # UPDATED LEGEND LABEL
@@ -397,6 +409,7 @@ if 'year_range' not in st.session_state:
     st.session_state['filter_column'] = 'None'
     st.session_state['filter_include'] = True
     st.session_state['filter_values'] = []
+    st.session_state['original_value_column'] = 'raised'  # Default
 
 
 # --- SIDEBAR (All Controls) ---
@@ -409,12 +422,14 @@ with st.sidebar:
     df_base = None 
     
     if uploaded_file:
-        df_base, error_msg = load_data(uploaded_file)
+        df_base, error_msg, original_value_column = load_data(uploaded_file)
         if df_base is None:
             st.error(error_msg)
             st.stop()
         
         st.caption(f"Loaded **{df_base.shape[0]}** rows for processing.")
+        # Store original_value_column in session state
+        st.session_state['original_value_column'] = original_value_column
         
     if df_base is not None:
         
@@ -607,7 +622,10 @@ if 'df_base' in locals() and df_base is not None:
         st.stop()
     
     # Generate the chart
-    chart_fig = generate_chart(final_data, st.session_state['category_column'], st.session_state['show_bars'], st.session_state['show_line'], st.session_state['chart_title'])
+    chart_fig = generate_chart(final_data, st.session_state['category_column'], 
+                               st.session_state['show_bars'], st.session_state['show_line'], 
+                               st.session_state['chart_title'], 
+                               st.session_state.get('original_value_column', 'raised'))
 
     # --- CHART CENTERING IMPROVEMENT ---
     # Centering and sizing adjustment: Minimized side margins ([0.05, 7, 0.05])
