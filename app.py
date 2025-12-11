@@ -15,13 +15,13 @@ CATEGORY_COLORS = ['#302A7E', '#8884B3', '#D0CCE5', '#5C5799', '#B4B1CE', '#E0DE
 # Define the default single bar color (third color in the palette for a lighter tone)
 SINGLE_BAR_COLOR = CATEGORY_COLORS[2]
 # Define the line chart color
-# CHANGED: from '#000000' to Dark purple
-LINE_COLOR = '#4B0082' 
+LINE_COLOR = '#000000' # Black for high contrast
+# Define the chart title color
+TITLE_COLOR = '#6F2A58' # Dark Berry for the title (UPDATED)
 # Default Title
 DEFAULT_TITLE = 'Grant Funding and Deal Count Over Time'
 
 # Set page config and general styles
-# CHANGED: page_title
 st.set_page_config(page_title="Time Series Chart Generator", layout="wide")
 plt.rcParams['font.family'] = 'sans-serif'
 plt.rcParams['font.sans-serif'] = ['Arial', 'Public Sans', 'DejaVu Sans']
@@ -226,7 +226,6 @@ def generate_chart(final_data, category_column, show_bars, show_line, chart_titl
         chart_ax2 = chart_ax1.twinx()
         line_data = final_data['row_count'].values
         
-        # Line color is now Dark Purple
         chart_ax2.plot(x_pos, line_data, color=LINE_COLOR, marker='o', linewidth=1.5, markersize=6, label='Number of Deals')
         
         # Calculate max_count after plotting to get accurate current limits
@@ -318,7 +317,6 @@ def generate_chart(final_data, category_column, show_bars, show_line, chart_titl
                                           markerfacecolor=SINGLE_BAR_COLOR, markersize=10, label='Total Amount'))
             
     if show_line:
-        # Line marker color is Dark Purple
         legend_elements.append(Line2D([0], [0], marker='o', color='w', 
                                       markerfacecolor=LINE_COLOR, markersize=10, label='Number of Deals'))
         
@@ -326,14 +324,14 @@ def generate_chart(final_data, category_column, show_bars, show_line, chart_titl
                      prop={'weight': 'normal'}, labelspacing=1.0)
     
     # Use the custom title here
-    plt.title(chart_title, fontsize=18, fontweight='bold', pad=20)
+    # UPDATED: color=TITLE_COLOR (Dark Berry)
+    plt.title(chart_title, fontsize=18, fontweight='bold', pad=20, color=TITLE_COLOR)
     plt.tight_layout()
     
     return chart_fig
 
 # --- STREAMLIT APP LAYOUT ---
 
-# CHANGED: st.title
 st.title("Time Series Chart Generator")
 st.markdown("---")
 
@@ -423,13 +421,11 @@ with st.sidebar:
 
         # --- Display Options ---
         st.subheader("Chart Elements")
-        # CHANGED: Checkbox label
         show_bars = st.checkbox(
             "Show bar for deal value", 
             value=st.session_state.get('show_bars', True), 
             key='show_bars_selector'
         )
-        # CHANGED: Checkbox label
         show_line = st.checkbox(
             "Show line for number of deals", 
             value=st.session_state.get('show_line', True), 
