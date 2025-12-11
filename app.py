@@ -128,7 +128,7 @@ def generate_chart(final_data, category_column, show_bars, show_line, chart_titl
     bar_width = 0.8
     x_pos = np.arange(len(final_data))
     
-    # 1. RE-SYNCHRONIZE ALL FONT SIZES (as requested)
+    # 1. SYNCHRONIZE ALL FONT SIZES (as requested)
     DYNAMIC_FONT_SIZE = max(8, min(14, int(50 / len(final_data)) * 3))
     
     category_cols = []
@@ -140,10 +140,8 @@ def generate_chart(final_data, category_column, show_bars, show_line, chart_titl
     else:
         y_max = final_data[category_cols].sum(axis=1).max()
 
-    # Define a threshold for relative bar positioning
-    # If a bar segment is shorter than this, the label will be placed near the bottom edge.
-    MIN_RELATIVE_HEIGHT_THRESHOLD = y_max * 0.05 # 5% of the total max Y-axis value
-    BAR_BOTTOM_PADDING_RATIO = 0.1 # Pad 10% of the segment height from the bottom edge
+    # Use vertical_offset for placement near the base of the bar
+    vertical_offset = y_max * 0.01 
     
     # --- AXIS 1 (Bar Chart - Value) ---
     if category_column != 'None':
@@ -161,17 +159,14 @@ def generate_chart(final_data, category_column, show_bars, show_line, chart_titl
                     current_color = color
                     text_color = '#FFFFFF' if is_dark_color(current_color) else '#000000'
                     
-                    segment_bottom = bottom[i]
-                    segment_height = val
-                    
-                    # 2. RELATIVE POSITIONING LOGIC for STACKED BARS
-                    if segment_height < MIN_RELATIVE_HEIGHT_THRESHOLD:
-                        # Bar segment is too short: place label just above the segment's floor
-                        y_pos = segment_bottom + (segment_height * BAR_BOTTOM_PADDING_RATIO)
-                        va = 'bottom' 
+                    # 2. REVERTED POSITIONING LOGIC for STACKED BARS
+                    if idx == 0:
+                        # Bottom segment: placed just above the x-axis
+                        y_pos = vertical_offset
+                        va = 'bottom'
                     else:
-                        # Bar segment is tall enough: center the label vertically
-                        y_pos = segment_bottom + segment_height / 2
+                        # Upper segments: placed in the vertical middle of the segment
+                        y_pos = bottom[i] + val / 2
                         va = 'center'
                         
                     chart_ax1.text(x, y_pos, label_text, ha='center', va=va,
@@ -188,17 +183,10 @@ def generate_chart(final_data, category_column, show_bars, show_line, chart_titl
                     label_text = format_currency(val)
                     text_color = '#FFFFFF' if is_dark_color(SINGLE_BAR_COLOR) else '#000000'
 
-                    # 2. RELATIVE POSITIONING LOGIC for SINGLE BARS
-                    segment_height = val
-                    
-                    if segment_height < MIN_RELATIVE_HEIGHT_THRESHOLD:
-                        # Bar is too short: place label just above the x-axis (segment floor is 0)
-                        y_pos = segment_height * BAR_BOTTOM_PADDING_RATIO
-                        va = 'bottom'
-                    else:
-                        # Bar is tall enough: center the label vertically
-                        y_pos = segment_height / 2
-                        va = 'center'
+                    # 2. REVERTED POSITIONING LOGIC for SINGLE BARS
+                    # Placed just above the x-axis
+                    y_pos = vertical_offset
+                    va = 'bottom'
                         
                     chart_ax1.text(x, y_pos, label_text, ha='center', va=va,
                                    fontsize=DYNAMIC_FONT_SIZE, fontweight='bold', color=text_color)
@@ -234,7 +222,7 @@ def generate_chart(final_data, category_column, show_bars, show_line, chart_titl
         y_range = chart_ax2.get_ylim()[1] - chart_ax2.get_ylim()[0]
         base_offset = y_range * 0.025 
         
-        # --- ADJUSTED PEAK/VALLEY/SLOPE PLACEMENT LOGIC ---
+        # --- PEAK/VALLEY/SLOPE PLACEMENT LOGIC ---
         num_points = len(line_data)
         
         for i, y in enumerate(line_data):
