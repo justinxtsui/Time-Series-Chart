@@ -338,16 +338,24 @@ def generate_chart(final_data, category_column, show_bars, show_line, chart_titl
 
 # --- STREAMLIT APP LAYOUT ---
 
-# 1. APPLICATION TITLE (Styled using Markdown/HTML for color)
+# Streamlit App Title: Color is APP_TITLE_COLOR (Dark Berry)
 st.markdown(f'<h1 style="color:{APP_TITLE_COLOR};">Time Series Chart Generator</h1>', unsafe_allow_html=True)
 st.markdown("---")
 
+# Initialize buffers and session state
+if 'year_range' not in st.session_state:
+    st.session_state['year_range'] = (1900, 2100)
+    st.session_state['category_column'] = 'None'
+    st.session_state['show_bars'] = True
+    st.session_state['show_line'] = True
+    st.session_state['chart_title'] = DEFAULT_TITLE
+    st.session_state['buf_png'] = BytesIO()
+    st.session_state['buf_svg'] = BytesIO()
 
-# 2. SIDEBAR FOR DATA & DOWNLOAD (Cleaned up)
-
+# --- SIDEBAR (All Functions) ---
 with st.sidebar:
     st.header("1️⃣ Data Source")
-    # IMPROVEMENT: Use a placeholder for clearer instruction
+    # File Uploader
     uploaded_file = st.file_uploader("Upload your Excel or CSV file", type=['xlsx', 'xls', 'csv'], 
                                      help="The file must contain a date column and a value column.")
 
@@ -360,104 +368,82 @@ with st.sidebar:
         
         st.caption(f"Loaded **{df.shape[0]}** rows for processing.")
         
-    # IMPROVEMENT: Use an expander for download for a cleaner look
-    st.markdown("---")
-    with st.expander("⬇️ Download Chart", expanded=False):
-        st.caption("Generate your chart in the main view before downloading.")
-        st.download_button(
-            label="Download as **PNG** (High-Res)",
-            data=st.session_state.get('buf_png', BytesIO()),
-            file_name=f"{st.session_state.get('chart_title', DEFAULT_TITLE).replace(' ', '_').lower()}_chart.png",
-            mime="image/png",
-            key="download_png",
-            use_container_width=True
-        )
-        st.download_button(
-            label="Download as **SVG** (Vector)",
-            data=st.session_state.get('buf_svg', BytesIO()),
-            file_name=f"{st.session_state.get('chart_title', DEFAULT_TITLE).replace(' ', '_').lower()}_chart.svg",
-            mime="image/svg+xml",
-            key="download_svg",
-            use_container_width=True
-        )
-
-
-# 3. MAIN AREA: CHART CONFIGURATION & GENERATION (Step-by-Step Flow)
-
-if df is not None:
-    
-    st.header("2️⃣ Chart Configuration")
-    st.markdown("---")
-    
-    # --- 2A. TIME & CATEGORY FILTERING ---
-    st.subheader("Time Range and Categorization")
-    
-    # Retrieve data constraints
-    min_year = int(df[DATE_COLUMN].dt.year.min())
-    max_year = int(df[DATE_COLUMN].dt.year.max())
-    all_years = list(range(min_year, max_year + 1))
-    
-    default_start = min_year
-    default_end = max_year
-    
-    current_start, current_end = st.session_state.get('year_range', (default_start, default_end))
-    
-    col_config_1, col_config_2, col_config_3 = st.columns([1, 1, 2])
-    
-    with col_config_1:
-        start_year = st.selectbox(
-            "Select Start Year",
-            options=all_years,
-            index=all_years.index(current_start) if current_start in all_years else 0,
-            key='start_year_selector',
-            help="First year of data to include."
-        )
+    if df is not None:
         
-    with col_config_2:
-        end_year = st.selectbox(
-            "Select End Year",
-            options=all_years,
-            index=all_years.index(current_end) if current_end in all_years else len(all_years) - 1,
-            key='end_year_selector',
-            help="Last year of data to include."
-        )
+        # --- 2. CHART CONFIGURATION (Moved to Sidebar) ---
+        st.markdown("---")
+        st.header("2️⃣ Chart Configuration")
         
-    if start_year > end_year:
-        st.error("Start Year must be less than or equal to End Year. Please adjust your selection.")
-        st.stop()
+        # 2A. Time Range Selection
+        st.subheader("Time Filters")
+        min_year = int(df[DATE_COLUMN].dt.year.min())
+        max_year = int(df[DATE_COLUMN].dt.year.max())
+        all_years = list(range(min_year, max_year + 1))
         
-    year_range = (start_year, end_year)
-    
-    category_columns = ['None'] + sorted([col for col in df.columns if col not in [DATE_COLUMN, VALUE_COLUMN]])
-    with col_config_3:
+        default_start = min_year
+        default_end = max_year
+        
+        current_start, current_end = st.session_state.get('year_range', (default_start, default_end))
+        
+        col_start, col_end = st.columns(2)
+        
+        with col_start:
+            start_year = st.selectbox(
+                "Start Year",
+                options=all_years,
+                index=all_years.index(current_start) if current_start in all_years else 0,
+                key='start_year_selector',
+                help="First year of data to include."
+            )
+            
+        with col_end:
+            end_year = st.selectbox(
+                "End Year",
+                options=all_years,
+                index=all_years.index(current_end) if current_end in all_years else len(all_years) - 1,
+                key='end_year_selector',
+                help="Last year of data to include."
+            )
+            
+        if start_year > end_year:
+            st.error("Start Year must be <= End Year.")
+            st.stop()
+            
+        year_range = (start_year, end_year)
+        
+        # 2B. Category Selection
+        st.subheader("Categorization")
+        category_columns = ['None'] + sorted([col for col in df.columns if col not in [DATE_COLUMN, VALUE_COLUMN]])
         category_column = st.selectbox(
             "Category Column (Optional Split)", 
             category_columns,
             index=category_columns.index(st.session_state.get('category_column', 'None')),
             key='category_col_selector',
-            help="Select a column to stack and color-code the bars by category."
+            help="Select a column to stack and color-code the bars."
         )
 
-    # --- 2B. ELEMENT CUSTOMIZATION & VISIBILITY ---
-    st.markdown("---")
-    st.subheader("Chart Visuals and Title")
-    
-    col_elem_1, col_elem_2, col_elem_3 = st.columns([1, 1, 2])
-    
-    with col_elem_1:
-        show_bars = st.checkbox(
-            "Show bar for deal value", 
-            value=st.session_state.get('show_bars', True), 
-            key='show_bars_selector'
-        )
-    with col_elem_2:
-        show_line = st.checkbox(
-            "Show line for number of deals", 
-            value=st.session_state.get('show_line', True), 
-            key='show_line_selector'
-        )
-    
-    with col_elem_3:
+        # 2C. Chart Elements and Title
+        st.subheader("Visual Elements")
+        
+        col_elem_1, col_elem_2 = st.columns(2)
+        
+        with col_elem_1:
+            show_bars = st.checkbox(
+                "Show bar for deal value", 
+                value=st.session_state.get('show_bars', True), 
+                key='show_bars_selector'
+            )
+        with col_elem_2:
+            show_line = st.checkbox(
+                "Show line for number of deals", 
+                value=st.session_state.get('show_line', True), 
+                key='show_line_selector'
+            )
+        
+        if not show_bars and not show_line:
+            st.warning("Select at least one element.")
+            st.stop()
+        
         custom_title = st.text_input(
             "Chart Title", 
             value=st.session_state.get('chart_title', DEFAULT_TITLE),
@@ -465,20 +451,48 @@ if df is not None:
             help="Customize the title shown above the chart."
         )
         st.session_state['chart_title'] = custom_title
-
-    if not show_bars and not show_line:
-        st.warning("Please select at least one element (Bars or Line) to display the chart.")
-        st.stop()
         
-    # Update session state with new values
-    st.session_state['year_range'] = year_range
-    st.session_state['category_column'] = category_column
-    st.session_state['show_bars'] = show_bars
-    st.session_state['show_line'] = show_line
+        # Update session state with final values
+        st.session_state['year_range'] = year_range
+        st.session_state['category_column'] = category_column
+        st.session_state['show_bars'] = show_bars
+        st.session_state['show_line'] = show_line
+        
+        # --- 3. DOWNLOAD SECTION (Consolidated) ---
+        st.markdown("---")
+        with st.expander("⬇️ Download Chart", expanded=True):
+            st.caption("Download your generated chart file.")
+            st.download_button(
+                label="Download as **PNG** (High-Res)",
+                data=st.session_state.get('buf_png', BytesIO()),
+                file_name=f"{custom_title.replace(' ', '_').lower()}_chart.png",
+                mime="image/png",
+                key="download_png",
+                use_container_width=True
+            )
+            st.download_button(
+                label="Download as **SVG** (Vector)",
+                data=st.session_state.get('buf_svg', BytesIO()),
+                file_name=f"{custom_title.replace(' ', '_').lower()}_chart.svg",
+                mime="image/svg+xml",
+                key="download_svg",
+                use_container_width=True
+            )
+
+
+# --- MAIN AREA: CHART DISPLAY ONLY ---
+
+if 'df' in locals() and df is not None:
     
-    # --- 3. CHART GENERATION ---
-    st.markdown("---")
     st.header("3️⃣ Generated Time Series Chart")
+    st.markdown("---")
+
+    # Retrieve parameters from session state
+    year_range = st.session_state['year_range']
+    category_column = st.session_state['category_column']
+    show_bars = st.session_state['show_bars']
+    show_line = st.session_state['show_line']
+    chart_title = st.session_state['chart_title']
     
     # Process the data
     final_data, process_error = process_data(df, year_range, category_column)
@@ -487,14 +501,14 @@ if df is not None:
         st.error(process_error)
         st.stop()
     
-    # Generate the chart, passing the custom title
+    # Generate the chart
     chart_fig = generate_chart(final_data, category_column, show_bars, show_line, chart_title)
 
-    # Use a clean container for the chart display
+    # Use a clean container for the chart display (IMPROVEMENT)
     with st.container(border=True):
         st.pyplot(chart_fig, use_container_width=True)
     
-    # --- Export Figure to Buffers (to update sidebar download buttons) ---
+    # --- Export Figure to Buffers (for download buttons) ---
     
     # PNG
     buf_png = BytesIO()
@@ -507,3 +521,25 @@ if df is not None:
     chart_fig.savefig(buf_svg, format='svg', bbox_inches='tight')
     buf_svg.seek(0)
     st.session_state['buf_svg'] = buf_svg
+
+else:
+    # Message for initial load (IMPROVEMENT: High-impact introduction)
+    st.info("⬆️ **Please upload your data file using the controls in the sidebar to begin chart configuration.**")
+    st.markdown("---")
+    
+    st.subheader("💡 How It Works")
+    st.markdown("""
+    This generator allows you to create professional-quality time series charts showing value (bars) and count (line) over time.
+
+    1.  **Upload:** Use the **1️⃣ Data Source** section in the sidebar.
+    2.  **Configure:** Set your date range, choose a category column to split your data, and customize the title under **2️⃣ Chart Configuration**.
+    3.  **View & Download:** Your chart will appear instantly here, ready for download in high resolution.
+    """)
+
+    st.markdown("---")
+    st.subheader("Expected Data Format")
+    st.markdown(f"""
+    Your file must contain, at minimum, these two columns:
+    * **Date Column:** `{DATE_COLUMN}` (must be parseable as a date)
+    * **Value Column:** `{VALUE_COLUMN}` (must be numeric, representing the amount/value)
+    """)
