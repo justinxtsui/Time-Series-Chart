@@ -128,12 +128,22 @@ def generate_chart(final_data, category_column, show_bars, show_line, chart_titl
     bar_width = 0.8
     x_pos = np.arange(len(final_data))
     
-    # Base font size calculation (scales dynamically with the number of bars/width)
-    base_font_size = max(8, min(14, int(50 / len(final_data)) * 3))
+    # DYNAMIC FONT SIZE: Scales inversely with the number of bars (proportional to bar width)
+    # The larger the bar width (fewer bars), the larger the font size.
     
-    # Define font sizes: Bar labels are one size smaller for better internal fit
-    BAR_LABEL_FONT_SIZE = max(6, base_font_size - 1)
-    AXIS_LINE_FONT_SIZE = base_font_size
+    num_bars = len(final_data)
+    # Base size of 16 for a single bar, shrinking down to a minimum of 8.
+    base_size = 16
+    min_size = 8
+    
+    # Scaling factor calculation
+    if num_bars > 0:
+        # Scale = max(min_size, base_size / num_bars)
+        # Using a slightly adjusted formula to keep the size proportional and within limits
+        DYNAMIC_FONT_SIZE = max(min_size, min(14, int(base_size * 5 / num_bars)))
+    else:
+        DYNAMIC_FONT_SIZE = 12
+    
     
     category_cols = []
     if category_column != 'None':
@@ -163,7 +173,7 @@ def generate_chart(final_data, category_column, show_bars, show_line, chart_titl
                     current_color = color
                     text_color = '#FFFFFF' if is_dark_color(current_color) else '#000000'
                     
-                    # Vertical positioning logic (reverted to original behavior):
+                    # Vertical positioning logic (near the base / center):
                     if idx == 0:
                         # Bottom segment: placed just above the x-axis
                         y_pos = vertical_offset
@@ -174,7 +184,7 @@ def generate_chart(final_data, category_column, show_bars, show_line, chart_titl
                         va = 'center'
                         
                     chart_ax1.text(x, y_pos, label_text, ha='center', va=va,
-                                   fontsize=BAR_LABEL_FONT_SIZE, fontweight='bold', color=text_color) # <-- BAR LABEL FONT SIZE
+                                   fontsize=DYNAMIC_FONT_SIZE, fontweight='bold', color=text_color)
             bottom += final_data[cat].values
     else:
         if show_bars:
@@ -187,19 +197,19 @@ def generate_chart(final_data, category_column, show_bars, show_line, chart_titl
                     label_text = format_currency(val)
                     text_color = '#FFFFFF' if is_dark_color(SINGLE_BAR_COLOR) else '#000000'
 
-                    # Vertical positioning logic (reverted to original behavior):
+                    # Vertical positioning logic (near the base):
                     # Placed just above the x-axis
                     y_pos = vertical_offset
                     va = 'bottom'
                         
                     chart_ax1.text(x, y_pos, label_text, ha='center', va=va,
-                                   fontsize=BAR_LABEL_FONT_SIZE, fontweight='bold', color=text_color) # <-- BAR LABEL FONT SIZE
+                                   fontsize=DYNAMIC_FONT_SIZE, fontweight='bold', color=text_color)
     
     chart_ax1.set_xticks(x_pos)
     chart_ax1.set_xticklabels(final_data['time_period'])
     
-    # Apply AXIS_LINE_FONT_SIZE
-    plt.setp(chart_ax1.get_xticklabels(), fontsize=AXIS_LINE_FONT_SIZE, fontweight='normal')
+    # Apply DYNAMIC_FONT_SIZE to years
+    plt.setp(chart_ax1.get_xticklabels(), fontsize=DYNAMIC_FONT_SIZE, fontweight='normal')
     
     chart_ax1.set_ylim(0, y_max * 1.1)
     chart_ax1.tick_params(axis='y', left=False, labelleft=False, right=False, labelright=False, length=0)
@@ -287,7 +297,7 @@ def generate_chart(final_data, category_column, show_bars, show_line, chart_titl
                 y_pos = y - base_offset
             
             chart_ax2.text(x, y_pos, str(int(y)), ha='center', va=va, 
-                           fontsize=AXIS_LINE_FONT_SIZE, # <-- LINE LABEL FONT SIZE
+                           fontsize=DYNAMIC_FONT_SIZE, # <-- APPLY DYNAMIC FONT SIZE
                            color=LINE_COLOR, fontweight='bold')
     
     # --- LEGEND & TITLE ---
