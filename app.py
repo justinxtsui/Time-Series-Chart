@@ -15,11 +15,11 @@ CATEGORY_COLORS = ['#302A7E', '#8884B3', '#D0CCE5', '#5C5799', '#B4B1CE', '#E0DE
 # Define the default single bar color (third color in the palette for a lighter tone)
 SINGLE_BAR_COLOR = CATEGORY_COLORS[2]
 # Define the line chart color
-LINE_COLOR = '#000000' # Line color is Black
+LINE_COLOR = '#000000' # Black for high contrast
 # Define the chart title color
-TITLE_COLOR = '#000000' # Matplotlib Chart Title Color is now BLACK (UPDATED)
+TITLE_COLOR = '#000000' # Matplotlib Chart Title Color is Black
 # Define the Application Title Color
-APP_TITLE_COLOR = '#6F2A58' # Dark Berry for the Streamlit Title (unchanged)
+APP_TITLE_COLOR = '#6F2A58' # Dark Berry for the Streamlit Title
 # Default Title
 DEFAULT_TITLE = 'Grant Funding and Deal Count Over Time'
 
@@ -193,8 +193,9 @@ def generate_chart(final_data, category_column, show_bars, show_line, chart_titl
             bottom += final_data[cat].values
     else:
         if show_bars:
+            # Bar chart label is used in the legend
             chart_ax1.bar(x_pos, final_data[VALUE_COLUMN], bar_width, 
-                          label='Total amount raised', color=SINGLE_BAR_COLOR, alpha=1.0)
+                          label='Total amount received', color=SINGLE_BAR_COLOR, alpha=1.0) # UPDATED LABEL
         
             for i, x in enumerate(x_pos):
                 val = final_data[VALUE_COLUMN].iloc[i]
@@ -228,7 +229,8 @@ def generate_chart(final_data, category_column, show_bars, show_line, chart_titl
         chart_ax2 = chart_ax1.twinx()
         line_data = final_data['row_count'].values
         
-        chart_ax2.plot(x_pos, line_data, color=LINE_COLOR, marker='o', linewidth=1.5, markersize=6, label='Number of deals')
+        # Line chart label is used in the legend
+        chart_ax2.plot(x_pos, line_data, color=LINE_COLOR, marker='o', linewidth=1.5, markersize=6, label='Number of Deals') # UPDATED LABEL
         
         # Calculate max_count after plotting to get accurate current limits
         max_count = line_data.max()
@@ -315,10 +317,12 @@ def generate_chart(final_data, category_column, show_bars, show_line, chart_titl
                 legend_elements.append(Line2D([0], [0], marker='o', color='w', 
                                               markerfacecolor=color, markersize=10, label=cat))
         else:
+            # UPDATED LEGEND LABEL
             legend_elements.append(Line2D([0], [0], marker='o', color='w', 
-                                          markerfacecolor=SINGLE_BAR_COLOR, markersize=10, label='Total Amount'))
+                                          markerfacecolor=SINGLE_BAR_COLOR, markersize=10, label='Total amount received'))
             
     if show_line:
+        # UPDATED LEGEND LABEL
         legend_elements.append(Line2D([0], [0], marker='o', color='w', 
                                       markerfacecolor=LINE_COLOR, markersize=10, label='Number of Deals'))
         
