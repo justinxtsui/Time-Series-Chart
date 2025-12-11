@@ -28,7 +28,7 @@ st.set_page_config(page_title="Time Series Chart Generator", layout="wide", init
 plt.rcParams['font.family'] = 'sans-serif'
 plt.rcParams['font.sans-serif'] = ['Arial', 'Public Sans', 'DejaVu Sans']
 
-# --- HELPER FUNCTIONS (No change in logic) ---
+# --- HELPER FUNCTIONS ---
 
 def format_currency(value):
     """
@@ -95,6 +95,23 @@ def load_data(uploaded_file):
         return None, f"Could not convert **`{DATE_COLUMN}`** to datetime format."
 
     return data, None
+
+@st.cache_data
+def apply_filter(df, filter_config):
+    """Applies dynamic filters to the DataFrame."""
+    if not filter_config['enabled'] or filter_config['column'] == 'None':
+        return df
+
+    col = filter_config['column']
+    values = filter_config['values']
+    is_include = filter_config['include']
+
+    if values:
+        if is_include:
+            return df[df[col].isin(values)]
+        else:
+            return df[~df[col].isin(values)]
+    return df
 
 @st.cache_data
 def process_data(df, year_range, category_column):
@@ -337,7 +354,7 @@ def generate_chart(final_data, category_column, show_bars, show_line, chart_titl
 
 # --- STREAMLIT APP LAYOUT ---
 
-# 1. MAIN APPLICATION TITLE (Styled with consistent hierarchy)
+# 1. MAIN APPLICATION TITLE
 st.markdown(f'<h1 style="color:{APP_TITLE_COLOR};">Time Series Chart Generator</h1>', unsafe_allow_html=True)
 st.markdown("---")
 
@@ -350,24 +367,28 @@ if 'year_range' not in st.session_state:
     st.session_state['chart_title'] = DEFAULT_TITLE
     st.session_state['buf_png'] = BytesIO()
     st.session_state['buf_svg'] = BytesIO()
+    st.session_state['filter_enabled'] = False
+    st.session_state['filter_column'] = 'None'
+    st.session_state['filter_include'] = True
+    st.session_state['filter_values'] = []
+
 
 # --- SIDEBAR (All Controls) ---
 with st.sidebar:
     st.header("1. Data Source")
-    # File Uploader
     uploaded_file = st.file_uploader("Upload your Excel or CSV file", type=['xlsx', 'xls', 'csv'], 
                                      help="The file must contain a date column and a value column.")
 
-    df = None
+    df_base = None
     if uploaded_file:
-        df, error_msg = load_data(uploaded_file)
-        if df is None:
+        df_base, error_msg = load_data(uploaded_file)
+        if df_base is None:
             st.error(error_msg)
             st.stop()
         
-        st.caption(f"Loaded **{df.shape[0]}** rows for processing.")
+        st.caption(f"Loaded **{df_base.shape[0]}** rows for processing.")
         
-    if df is not None:
+    if df_base is not None:
         
         # --- 2. CHART CONFIGURATION ---
         st.markdown("---")
@@ -375,8 +396,8 @@ with st.sidebar:
         
         # 2A. Time Range Selection
         st.subheader("Time Filters")
-        min_year = int(df[DATE_COLUMN].dt.year.min())
-        max_year = int(df[DATE_COLUMN].dt.year.max())
+        min_year = int(df_base[DATE_COLUMN].dt.year.min())
+        max_year = int(df_base[DATE_COLUMN].dt.year.max())
         all_years = list(range(min_year, max_year + 1))
         
         default_start = min_year
@@ -412,7 +433,9 @@ with st.sidebar:
         
         # 2B. Category Selection
         st.subheader("Categorization")
-        category_columns = ['None'] + sorted([col for col in df.columns if col not in [DATE_COLUMN, VALUE_COLUMN]])
+        config_columns = [col for col in df_base.columns if col not in [DATE_COLUMN, VALUE_COLUMN]]
+        category_columns = ['None'] + sorted(config_columns)
+        
         category_column = st.selectbox(
             "Category Column (Optional Split)", 
             category_columns,
@@ -451,15 +474,58 @@ with st.sidebar:
         )
         st.session_state['chart_title'] = custom_title
         
-        # Update session state with final values
+        # Update session state with core config values
         st.session_state['year_range'] = year_range
         st.session_state['category_column'] = category_column
         st.session_state['show_bars'] = show_bars
         st.session_state['show_line'] = show_line
-        
-        # --- 3. DOWNLOAD SECTION ---
+
+        # --- 3. DATA FILTER ---
         st.markdown("---")
-        st.header("3. Download Chart")
+        st.header("3. Data Filter")
+
+        filter_enabled = st.checkbox('Enable Data Filtering', value=st.session_state['filter_enabled'])
+        st.session_state['filter_enabled'] = filter_enabled
+
+        if filter_enabled:
+            
+            filter_columns = ['None'] + sorted([c for c in df_base.columns if df_base[c].dtype in ['object', 'category'] and c not in [DATE_COLUMN]])
+            
+            filter_column = st.selectbox(
+                "Select Column to Filter",
+                filter_columns,
+                index=filter_columns.index(st.session_state['filter_column']) if st.session_state['filter_column'] in filter_columns else 0,
+                key='filter_col_selector'
+            )
+            st.session_state['filter_column'] = filter_column
+
+            if filter_column != 'None':
+                
+                # Fetch unique values for the selected column
+                unique_values = df_base[filter_column].astype(str).unique().tolist()
+                
+                filter_mode = st.radio(
+                    "Filter Mode",
+                    options=["Include selected values", "Exclude selected values"],
+                    index=0 if st.session_state['filter_include'] else 1,
+                    key='filter_mode_radio'
+                )
+                
+                st.session_state['filter_include'] = (filter_mode == "Include selected values")
+                
+                selected_values = st.multiselect(
+                    f"Select values in '{filter_column}'",
+                    options=unique_values,
+                    default=st.session_state['filter_values'] if st.session_state['filter_values'] else unique_values,
+                    key='filter_values_selector'
+                )
+                st.session_state['filter_values'] = selected_values
+            else:
+                 st.session_state['filter_values'] = []
+
+        # --- 4. DOWNLOAD SECTION ---
+        st.markdown("---")
+        st.header("4. Download Chart")
         
         with st.expander("Download Options", expanded=True):
             st.caption("Download your generated chart file.")
@@ -483,27 +549,31 @@ with st.sidebar:
 
 # --- MAIN AREA: CHART DISPLAY ONLY ---
 
-if 'df' in locals() and df is not None:
+if 'df_base' in locals() and df_base is not None:
     
-    # NOTE: Removed the redundant 'Generated Time Series Chart' header
-    # and the surrounding st.container(border=True) component.
+    # Apply dynamic filter first
+    filter_config = {
+        'enabled': st.session_state['filter_enabled'],
+        'column': st.session_state['filter_column'],
+        'include': st.session_state['filter_include'],
+        'values': st.session_state['filter_values']
+    }
     
-    # Retrieve parameters from session state
-    year_range = st.session_state['year_range']
-    category_column = st.session_state['category_column']
-    show_bars = st.session_state['show_bars']
-    show_line = st.session_state['show_line']
-    chart_title = st.session_state['chart_title']
+    df_filtered = apply_filter(df_base, filter_config)
     
+    if df_filtered.empty:
+        st.error("The selected filters resulted in no data. Please adjust your configuration.")
+        st.stop()
+        
     # Process the data
-    final_data, process_error = process_data(df, year_range, category_column)
+    final_data, process_error = process_data(df_filtered, st.session_state['year_range'], st.session_state['category_column'])
     
     if final_data is None:
         st.error(process_error)
         st.stop()
     
     # Generate the chart
-    chart_fig = generate_chart(final_data, category_column, show_bars, show_line, chart_title)
+    chart_fig = generate_chart(final_data, st.session_state['category_column'], st.session_state['show_bars'], st.session_state['show_line'], st.session_state['chart_title'])
 
     # Display the chart directly in the main area
     st.pyplot(chart_fig, use_container_width=True)
@@ -523,7 +593,7 @@ if 'df' in locals() and df is not None:
     st.session_state['buf_svg'] = buf_svg
 
 else:
-    # Message for initial load (Cleaned up and professional)
+    # Message for initial load
     st.info("⬆️ **Please upload your data file using the controls in the sidebar (Section 1) to begin chart configuration.**")
     st.markdown("---")
     
@@ -533,7 +603,8 @@ else:
 
     1.  **Upload:** Provide your data file in the sidebar.
     2.  **Configure:** Use the controls under **'2. Chart Configuration'** to filter the time range, choose a category for stacking, and set the title.
-    3.  **View & Download:** The generated chart will appear instantly here, ready for high-resolution download in Section 3 of the sidebar.
+    3.  **Filter (New!):** Use **'3. Data Filter'** to include or exclude specific data points based on column values.
+    4.  **View & Download:** The generated chart will appear instantly here, ready for high-resolution download in Section 4 of the sidebar.
     """)
 
     st.markdown("---")
