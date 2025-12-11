@@ -21,25 +21,25 @@ if uploaded_file is not None:
     else:
         data = pd.read_excel(uploaded_file)
     
-    st.success(f"File uploaded successfully! Shape: {data.shape}")
+    # Hardcode column names as per user request
+    date_column = "deal date"
+    value_column = "amount raised"
+
+    # Check if the required columns exist
+    if date_column not in data.columns or value_column not in data.columns:
+        st.error(f"Required columns '{date_column}' and '{value_column}' must be present in the uploaded file.")
+        st.stop()
+        
+    st.success(f"File uploaded successfully! X-axis set to '{date_column}', Bar value set to '{value_column}'. Shape: {data.shape}")
     st.dataframe(data.head())
     
     # Column selection
     st.subheader("Configure Chart Settings")
     
-    col1, col2, col3 = st.columns(3)
+    # Use a single column for the only remaining selection (Category)
+    col_cat = st.columns(1)[0]
     
-    with col1:
-        # Date column selection
-        date_columns = data.select_dtypes(include=['datetime64', 'object']).columns.tolist()
-        date_column = st.selectbox("Select Date Column (X-axis)", date_columns)
-    
-    with col2:
-        # Value column selection
-        numeric_columns = data.select_dtypes(include=['number']).columns.tolist()
-        value_column = st.selectbox("Select Value Column (Bar height)", numeric_columns)
-    
-    with col3:
+    with col_cat:
         # Category column selection (optional)
         category_columns = ['None'] + data.columns.tolist()
         category_column = st.selectbox("Select Category Column (Bar colors - optional)", category_columns)
@@ -54,6 +54,16 @@ if uploaded_file is not None:
     with col5:
         show_line = st.checkbox("Show Line (Number of deals)", value=True)
     
+    # Function to calculate dynamic font size
+    def calculate_dynamic_font_size(num_elements):
+        # Base size for few elements
+        base_size = 12
+        # Determine the reduction factor (e.g., reduce size by 1 for every 5 elements over 5)
+        reduction = max(0, (num_elements - 5) // 5) 
+        # Minimum font size
+        min_size = 8
+        return max(min_size, base_size - reduction)
+
     # Generate chart button
     if st.button("Generate Chart", type="primary"):
         # Process the data
@@ -101,8 +111,12 @@ if uploaded_file is not None:
         st.success("Data processed successfully!")
         st.dataframe(final_data.head())
         
+        # Calculate dynamic font size
+        dynamic_bar_font_size = calculate_dynamic_font_size(len(final_data))
+        
         # Function to format currency values
         def format_currency(value):
+            # Assumes value is in GBP as requested by user
             if value >= 1e9:
                 val = value / 1e9
                 if val >= 100:
@@ -149,9 +163,9 @@ if uploaded_file is not None:
                 return f'£{value:.2f}'
         
         # Create the chart with reduced width to bring bars closer
-        chart_fig, chart_ax1 = plt.subplots(figsize=(10, 8))  # Reduced from 14 to 10
+        chart_fig, chart_ax1 = plt.subplots(figsize=(10, 8))
         
-        bar_width = 0.6  # Keep original bar width
+        bar_width = 0.6
         x_pos = np.arange(len(final_data))
         
         # Determine if we have categories or not
@@ -168,7 +182,7 @@ if uploaded_file is not None:
                 for idx, cat in enumerate(category_cols):
                     color = colors[idx % len(colors)]
                     chart_ax1.bar(x_pos, final_data[cat], bar_width, bottom=bottom, 
-                           label=cat, color=color, alpha=1.0)
+                                label=cat, color=color, alpha=1.0)
                     
                     # Add labels to each bar segment
                     for i, x in enumerate(x_pos):
@@ -179,14 +193,14 @@ if uploaded_file is not None:
                             # Use light grey text for dark colors, black for light colors
                             text_color = '#D3D3D3' if idx % 2 == 1 else 'black'
                             chart_ax1.text(x, y_pos, label_text, ha='center', va='center',
-                                    fontsize=12, fontfamily='Public Sans', fontweight='semibold', color=text_color)
+                                    fontsize=dynamic_bar_font_size, fontfamily='Public Sans', fontweight='semibold', color=text_color)
                     
                     bottom += final_data[cat].values
         else:
             # Single bar without categories (use light purple as default)
             if show_bars:
                 chart_ax1.bar(x_pos, final_data[value_column], bar_width, 
-                       label='Amount raised', color='#EDD9E4', alpha=1.0)
+                            label='Amount raised', color='#EDD9E4', alpha=1.0)
                 
                 # Add labels to bars
                 baseline_position = final_data[value_column].iloc[0] * 0.05 if len(final_data) > 0 else 0
@@ -195,13 +209,13 @@ if uploaded_file is not None:
                     if val > 0:
                         label_text = format_currency(val)
                         chart_ax1.text(x, baseline_position, label_text, ha='center', va='bottom',
-                                fontsize=12, fontfamily='Public Sans', fontweight='semibold', color='black')
+                                fontsize=dynamic_bar_font_size, fontfamily='Public Sans', fontweight='semibold', color='black')
         
         # Set up x-axis
         chart_ax1.set_xticks(x_pos)
-        chart_ax1.set_xticklabels(final_data['time_period'], fontfamily='Public Sans', fontsize=12)
+        chart_ax1.set_xticklabels(final_data['time_period'], fontfamily='Public Sans', fontsize=12, fontweight='semibold')
         chart_ax1.tick_params(axis='y', labelsize=10, left=False, labelleft=False, 
-                       right=False, labelright=False, length=0)
+                            right=False, labelright=False, length=0)
         chart_ax1.tick_params(axis='x', labelsize=12, bottom=False, length=0)
         
         # Remove spines
@@ -215,9 +229,9 @@ if uploaded_file is not None:
         if show_line:
             chart_ax2 = chart_ax1.twinx()
             chart_ax2.plot(x_pos, final_data['row_count'], color='black', 
-                    marker='o', linewidth=1.0, markersize=5, label='Number of deals')
+                        marker='o', linewidth=1.0, markersize=5, label='Number of deals')
             chart_ax2.tick_params(axis='y', labelsize=10, right=False, labelright=False, 
-                           left=False, labelleft=False, length=0)
+                                left=False, labelleft=False, length=0)
             chart_ax2.set_ylim(0, final_data['row_count'].max() * 1.5)
             
             # Add labels to line points
@@ -239,10 +253,10 @@ if uploaded_file is not None:
                 offset = y_range * 0.02
                 
                 if place_below:
-                    chart_ax2.text(x, y - offset, str(y), ha='center', va='top', fontsize=12, 
+                    chart_ax2.text(x, y - offset, str(y), ha='center', va='top', fontsize=dynamic_bar_font_size, 
                             fontfamily='Public Sans', color=text_color, fontweight='semibold')
                 else:
-                    chart_ax2.text(x, y + offset, str(y), ha='center', va='bottom', fontsize=12, 
+                    chart_ax2.text(x, y + offset, str(y), ha='center', va='bottom', fontsize=dynamic_bar_font_size, 
                             fontfamily='Public Sans', color=text_color, fontweight='semibold')
             
             # Remove spines for second axis
@@ -260,17 +274,17 @@ if uploaded_file is not None:
                 for idx, cat in enumerate(category_cols):
                     color = colors[idx % len(colors)]
                     legend_elements.append(Line2D([0], [0], marker='o', color='w', 
-                           markerfacecolor=color, markersize=10, label=cat))
+                                    markerfacecolor=color, markersize=10, label=cat))
             else:
                 legend_elements.append(Line2D([0], [0], marker='o', color='w', 
-                           markerfacecolor='#EDD9E4', markersize=10, label='Amount raised'))
+                                    markerfacecolor='#EDD9E4', markersize=10, label='Amount raised'))
         
         if show_line:
             legend_elements.append(Line2D([0], [0], marker='o', color='w', 
-                           markerfacecolor='black', markersize=10, label='Number of deals'))
+                                    markerfacecolor='black', markersize=10, label='Number of deals'))
         
         chart_ax1.legend(handles=legend_elements, loc='upper left', fontsize=18, frameon=False, 
-                  prop={'family': 'Public Sans'}, labelspacing=1.2)
+                    prop={'family': 'Public Sans', 'weight': 'semibold'}, labelspacing=1.2)
         
         plt.title('Data Visualization', fontsize=14, fontweight='bold', pad=20, fontfamily='Public Sans')
         plt.tight_layout()
