@@ -4,388 +4,400 @@ import matplotlib.pyplot as plt
 import numpy as np
 from io import BytesIO
 from matplotlib.lines import Line2D
-from matplotlib.colors import to_rgb
 
-# --- CONFIGURATION ---
-# Define required column names
-DATE_COLUMN = 'Date the participant received the grant'
-VALUE_COLUMN = 'Amount received (converted to GBP)'
-# Define the color palette for categories
-CATEGORY_COLORS = ['#302A7E', '#8884B3', '#D0CCE5', '#5C5799', '#B4B1CE', '#E0DEE9']
-# Define the default single bar color (first color in the palette)
-SINGLE_BAR_COLOR = CATEGORY_COLORS[2] # A lighter tone for single bars
-# Define the line chart color
-LINE_COLOR = '#000000' # Black for high contrast
+# Set page config
+st.set_page_config(page_title="Chart Generator", layout="wide")
 
-# Set page config and general styles
-st.set_page_config(page_title="Dynamic Grant Chart Generator", layout="wide")
-plt.rcParams['font.family'] = 'sans-serif'
-plt.rcParams['font.sans-serif'] = ['Arial', 'Public Sans', 'DejaVu Sans']
+# Title
+st.title("Interactive Chart Generator")
 
-# --- HELPER FUNCTIONS ---
+# File upload
+uploaded_file = st.file_uploader("Upload your Excel or CSV file", type=['xlsx', 'xls', 'csv'])
 
-def format_currency(value):
-    """
-    Format a numeric value as money with £ and units (k, m, b),
-    to 3 significant figures.
-    """
-    value = float(value)
-    if value == 0:
-        return "£0"
-    neg = value < 0
-    x_abs = abs(value)
-    
-    # Use standard Python formatting for simplicity and precision control
-    if x_abs >= 1e9:
-        unit = "b"
-        divisor = 1e9
-    elif x_abs >= 1e6:
-        unit = "m"
-        divisor = 1e6
-    elif x_abs >= 1e3:
-        unit = "k"
-        divisor = 1e3
-    else:
-        unit = ""
-        divisor = 1.0
-
-    scaled = x_abs / divisor
-    # Ensure 3 significant figures while being concise
-    s = f"{scaled:.3g}"
-    
-    # Handle cases like 1.00 or 100.0, which should drop decimal for integers
-    try:
-        if float(s).is_integer():
-            s = str(int(float(s)))
-    except:
-        pass # Keep string formatting if conversion fails
-
-    sign = "-" if neg else ""
-    return f"{sign}£{s}{unit}"
-
-def is_dark_color(hex_color):
-    """Check if a hex color is dark. Returns True if dark, False if light."""
-    try:
-        # Convert hex to RGB (0-1 range)
-        r, g, b = to_rgb(hex_color)
-        # Calculate luminance (ITU-R BT.709)
-        luminance = (0.2126 * r + 0.7152 * g + 0.0722 * b)
-        return luminance < 0.5
-    except ValueError:
-        return False # Default to false if color is invalid
-
-@st.cache_data
-def load_data(uploaded_file):
-    """Loads and preprocesses the uploaded file."""
+if uploaded_file is not None:
+    # Load the data
+    # NOTE: The data loading assumes the first sheet for Excel files, as per your input context.
     if uploaded_file.name.endswith('.csv'):
         data = pd.read_csv(uploaded_file)
     else:
-        # Check sheet names for Excel files
-        xls = pd.ExcelFile(uploaded_file)
-        if len(xls.sheet_names) > 1:
-            st.warning("Excel file has multiple sheets. Loading the first sheet.")
-        data = pd.read_excel(uploaded_file, sheet_name=0)
-        
+        data = pd.read_excel(uploaded_file)
+    
+    # Fixed column names
+    date_column = 'Date the participant received the grant'
+    value_column = 'Amount received (converted to GBP)'
+    
     # Check if required columns exist
-    if DATE_COLUMN not in data.columns or VALUE_COLUMN not in data.columns:
-        return None, f"File must contain columns: **`{DATE_COLUMN}`** and **`{VALUE_COLUMN}`**."
-
-    # Ensure date column is datetime
-    try:
-        data[DATE_COLUMN] = pd.to_datetime(data[DATE_COLUMN], errors='coerce')
-        data.dropna(subset=[DATE_COLUMN], inplace=True)
-    except Exception:
-        return None, f"Could not convert **`{DATE_COLUMN}`** to datetime format."
-
-    return data, None
-
-@st.cache_data
-def process_data(df, year_range, category_column):
-    """Filters and aggregates the data for charting."""
-    df = df.copy()
-    start_year, end_year = year_range
-    
-    # Filter data based on selected year range
-    chart_data = df[df[DATE_COLUMN].dt.year.between(start_year, end_year, inclusive='both')].copy()
-    
-    if chart_data.empty:
-        return None, "No data available for the selected year range."
-    
-    chart_data['time_period'] = chart_data[DATE_COLUMN].dt.year
-    
-    if category_column != 'None':
-        # Group by time period and category
-        grouped = chart_data.groupby(['time_period', category_column]).agg({
-            VALUE_COLUMN: 'sum'
-        }).reset_index()
-        
-        # Count rows per time period
-        row_counts = chart_data.groupby('time_period').size().reset_index(name='row_count')
-        
-        # Pivot to get categories as columns
-        pivot_data = grouped.pivot(index='time_period', columns=category_column, values=VALUE_COLUMN).fillna(0)
-        
-        # Merge with row counts
-        final_data = pivot_data.reset_index()
-        final_data = final_data.merge(row_counts, on='time_period')
-    else:
-        # Group by time period only
-        grouped = chart_data.groupby('time_period').agg({
-            VALUE_COLUMN: 'sum'
-        }).reset_index()
-        
-        # Count rows per time period
-        row_counts = chart_data.groupby('time_period').size().reset_index(name='row_count')
-        
-        # Merge
-        final_data = grouped.merge(row_counts, on='time_period')
-    
-    return final_data, None
-
-
-def generate_chart(final_data, category_column, show_bars, show_line):
-    """Generates the dual-axis Matplotlib chart."""
-    chart_fig, chart_ax1 = plt.subplots(figsize=(12, 6))
-    
-    bar_width = 0.8
-    x_pos = np.arange(len(final_data))
-    
-    # Determine dynamic font size for labels based on the number of bars
-    dynamic_font_size = max(8, min(14, int(50 / len(final_data)) * 3))
-    
-    category_cols = []
-    if category_column != 'None':
-        category_cols = [col for col in final_data.columns if col not in ['time_period', 'row_count']]
-
-    # Calculate y_max for plot limits and vertical offset
-    if category_column == 'None':
-        y_max = final_data[VALUE_COLUMN].max()
-    else:
-        y_max = final_data[category_cols].sum(axis=1).max()
-
-    # Fixed vertical offset for bar labels (inside the bar, near the bottom)
-    vertical_offset = y_max * 0.01 
-    
-    # --- AXIS 1 (Bar Chart - Value) ---
-    if category_column != 'None':
-        # Stacked Bars
-        bottom = np.zeros(len(final_data))
-        for idx, cat in enumerate(category_cols):
-            color = CATEGORY_COLORS[idx % len(CATEGORY_COLORS)]
-            if show_bars:
-                chart_ax1.bar(x_pos, final_data[cat], bar_width, bottom=bottom, 
-                              label=cat, color=color, alpha=1.0)
-            
-            # Add labels to each bar segment
-            for i, x in enumerate(x_pos):
-                val = final_data[cat].iloc[i]
-                if val > 0 and show_bars:
-                    label_text = format_currency(val)
-                    current_color = color
-                    text_color = '#FFFFFF' if is_dark_color(current_color) else '#000000'
-                    
-                    if idx == 0:
-                        # Bottom bar: position at bottom center with small vertical offset
-                        y_pos = vertical_offset
-                        va = 'bottom'
-                    else:
-                        # Other segments: center positioning
-                        y_pos = bottom[i] + val / 2
-                        va = 'center'
-                        
-                    chart_ax1.text(x, y_pos, label_text, ha='center', va=va,
-                                   fontsize=dynamic_font_size, fontweight='bold', color=text_color)
-            bottom += final_data[cat].values
-    else:
-        # Single Bar
-        if show_bars:
-            chart_ax1.bar(x_pos, final_data[VALUE_COLUMN], bar_width, 
-                          label='Total Amount', color=SINGLE_BAR_COLOR, alpha=1.0)
-        
-            # Add labels to bars
-            for i, x in enumerate(x_pos):
-                val = final_data[VALUE_COLUMN].iloc[i]
-                if val > 0:
-                    label_text = format_currency(val)
-                    text_color = '#FFFFFF' if is_dark_color(SINGLE_BAR_COLOR) else '#000000'
-                    chart_ax1.text(x, vertical_offset, label_text, ha='center', va='bottom',
-                                   fontsize=dynamic_font_size, fontweight='bold', color=text_color)
-    
-    # Set up x-axis ticks (Years)
-    chart_ax1.set_xticks(x_pos)
-    chart_ax1.set_xticklabels(final_data['time_period'])
-    
-    plt.setp(chart_ax1.get_xticklabels(), fontsize=dynamic_font_size + 1, fontweight='normal')
-    
-    # Clean up AXIS 1
-    chart_ax1.set_ylim(0, y_max * 1.1)
-    chart_ax1.tick_params(axis='y', left=False, labelleft=False, right=False, labelright=False, length=0)
-    chart_ax1.tick_params(axis='x', bottom=False, length=0, pad=6)
-    for spine in chart_ax1.spines.values():
-        spine.set_visible(False)
-    chart_ax1.grid(False)
-
-    # --- AXIS 2 (Line Chart - Count) ---
-    if show_line:
-        chart_ax2 = chart_ax1.twinx()
-        line_data = final_data['row_count']
-        max_count = line_data.max()
-        
-        chart_ax2.plot(x_pos, line_data, color=LINE_COLOR, marker='o', linewidth=1.5, markersize=6, label='Number of Deals')
-        
-        # Clean up AXIS 2
-        chart_ax2.set_ylim(0, max_count * 1.5)
-        chart_ax2.tick_params(axis='y', right=False, labelright=False, left=False, labelleft=False, length=0)
-        for spine in chart_ax2.spines.values():
-            spine.set_visible(False)
-            
-        # Add labels to line points
-        y_range = chart_ax2.get_ylim()[1] - chart_ax2.get_ylim()[0]
-        base_offset = y_range * 0.015 # Vertical offset from the point
-        
-        for i, (x, y) in enumerate(zip(x_pos, line_data)):
-            # Determine if label should go above or below (simple logic: alternate or based on neighbors)
-            place_below = (i % 2 == 0) # Alternate for simplicity, or use your existing more complex logic
-            
-            # Adjust position and alignment
-            va = 'top' if place_below else 'bottom'
-            y_pos = y - base_offset if place_below else y + base_offset
-            
-            # Line labels are always black on the white canvas (no bar background check needed)
-            chart_ax2.text(x, y_pos, str(int(y)), ha='center', va=va, fontsize=dynamic_font_size, 
-                           color=LINE_COLOR, fontweight='bold')
-    
-    # --- LEGEND & TITLE ---
-    legend_elements = []
-    
-    if show_bars:
-        if category_column != 'None':
-            for idx, cat in enumerate(category_cols):
-                color = CATEGORY_COLORS[idx % len(CATEGORY_COLORS)]
-                legend_elements.append(Line2D([0], [0], marker='o', color='w', 
-                                              markerfacecolor=color, markersize=10, label=cat))
-        else:
-            legend_elements.append(Line2D([0], [0], marker='o', color='w', 
-                                          markerfacecolor=SINGLE_BAR_COLOR, markersize=10, label='Total Amount'))
-            
-    if show_line:
-        legend_elements.append(Line2D([0], [0], marker='o', color='w', 
-                                      markerfacecolor=LINE_COLOR, markersize=10, label='Number of Deals'))
-        
-    chart_ax1.legend(handles=legend_elements, loc='upper left', fontsize=12, frameon=False, 
-                     prop={'weight': 'normal'}, labelspacing=1.0)
-    
-    plt.title('Grant Funding and Deal Count Over Time', fontsize=18, fontweight='bold', pad=20)
-    plt.tight_layout()
-    
-    return chart_fig
-
-# --- STREAMLIT APP LAYOUT ---
-
-st.title("📊 Dynamic Grant Funding Chart Generator")
-st.markdown("""
-Easily visualize the **Amount Received (converted to GBP)** aggregated by year,
-optionally broken down by a category column, alongside the **Number of Deals** (rows).
-""")
-st.markdown("---")
-
-# Use a sidebar for controls
-with st.sidebar:
-    st.header("1. Upload Data")
-    uploaded_file = st.file_uploader("Upload your Excel or CSV file", type=['xlsx', 'xls', 'csv'])
-
-    df = None
-    if uploaded_file:
-        df, error_msg = load_data(uploaded_file)
-        if df is None:
-            st.error(error_msg)
-            st.stop()
-        
-        st.success(f"Loaded {df.shape[0]} rows. Data columns: **`{DATE_COLUMN}`** (X-axis), **`{VALUE_COLUMN}`** (Bar Value).")
-        
-    if df is not None:
-        st.markdown("---")
-        st.header("2. Configure Visualization")
-        
-        # --- Year Range Selection ---
-        min_year = df[DATE_COLUMN].dt.year.min()
-        max_year = df[DATE_COLUMN].dt.year.max()
-        
-        if pd.isna(min_year) or pd.isna(max_year):
-             st.warning("No valid dates found for year selection.")
-             year_range = (2000, 2024)
-        else:
-            year_range = st.slider(
-                "Select Year Range",
-                min_value=int(min_year),
-                max_value=int(max_year),
-                value=(int(min_year), int(max_year)),
-                step=1
-            )
-            
-        # --- Category Column Selection ---
-        category_columns = ['None'] + sorted([col for col in df.columns if col not in [DATE_COLUMN, VALUE_COLUMN]])
-        category_column = st.selectbox("Select Category Column (Splits bars)", category_columns)
-
-        # --- Display Options ---
-        st.subheader("Chart Elements")
-        show_bars = st.checkbox("Show Total Grant Amount Bars", value=True)
-        show_line = st.checkbox("Show Deal Count Line", value=True)
-        
-        if not show_bars and not show_line:
-            st.warning("Please select at least one element (Bars or Line) to display the chart.")
-            st.stop()
-        
-        st.markdown("---")
-        st.header("3. Download Options")
-
-# --- MAIN AREA: CHART GENERATION ---
-
-if df is not None and ('year_range' in locals() or 'year_range' in globals()):
-    
-    # Process the data (no button needed, Streamlit handles reruns on widget change)
-    final_data, process_error = process_data(df, year_range, category_column)
-    
-    if final_data is None:
-        st.error(process_error)
+    if date_column not in data.columns or value_column not in data.columns:
+        st.error(f"File must contain columns: '{date_column}' and '{value_column}'")
         st.stop()
-    
-    # Generate the chart
-    chart_fig = generate_chart(final_data, category_column, show_bars, show_line)
-
-    st.subheader("Generated Chart")
-    st.pyplot(chart_fig, use_container_width=True)
-    
-    st.markdown("---")
-    
-    # Download section (aligned with the sidebar logic for consistency)
-    
-    col_download1, col_download2 = st.columns(2)
-    
-    # PNG download
-    buf_png = BytesIO()
-    chart_fig.savefig(buf_png, format='png', dpi=300, bbox_inches='tight')
-    buf_png.seek(0)
-    
-    with col_download1:
-        st.download_button(
-            label="Download Chart as **PNG** 🖼️",
-            data=buf_png,
-            file_name="grant_funding_chart.png",
-            mime="image/png",
-            use_container_width=True
-        )
         
-    # SVG download
-    buf_svg = BytesIO()
-    chart_fig.savefig(buf_svg, format='svg', bbox_inches='tight')
-    buf_svg.seek(0)
+    # Ensure date column is datetime for filtering and plotting
+    try:
+        data[date_column] = pd.to_datetime(data[date_column], errors='coerce')
+        # Drop rows where date conversion failed to maintain data integrity
+        data.dropna(subset=[date_column], inplace=True) 
+    except Exception:
+        st.error(f"Could not convert '{date_column}' to datetime format.")
+        st.stop()
+        
+    # Process dates to get min/max year for input defaults
+    min_year_default = int(data[date_column].dt.year.min()) if not pd.isna(data[date_column].dt.year.min()) else 2000
+    max_year_default = int(data[date_column].dt.year.max()) if not pd.isna(data[date_column].dt.year.max()) else 2024
     
-    with col_download2:
-        st.download_button(
-            label="Download Chart as **SVG** 📐",
-            data=buf_svg,
-            file_name="grant_funding_chart.svg",
-            mime="image/svg+xml",
-            use_container_width=True
+    st.success(f"File loaded successfully! X-axis: '{date_column}', Bar value: '{value_column}'. Shape: {data.shape}")
+    st.dataframe(data.head())
+    
+    # Configuration and Input
+    st.subheader("Configure Chart Settings")
+    
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        # Category column selection (optional)
+        category_columns = ['None'] + data.columns.tolist()
+        category_column = st.selectbox("Select Category Column (Bar colors - optional)", category_columns)
+        
+    # MODIFIED: Replacing slider with number inputs for Year Range
+    with col2:
+        start_year_input = st.number_input(
+            "Start Year",
+            min_value=1900,
+            max_value=max_year_default,
+            value=min_year_default,
+            step=1,
+            key='start_year_input'
         )
+    with col3:
+        end_year_input = st.number_input(
+            "End Year",
+            min_value=min_year_default,
+            max_value=2100,
+            value=max_year_default,
+            step=1,
+            key='end_year_input'
+        )
+
+    # Validate year range input
+    if start_year_input > end_year_input:
+        st.error("Start Year must be less than or equal to End Year.")
+        st.stop()
+        
+    year_range = (start_year_input, end_year_input)
+
+    # Display options
+    st.subheader("Display Options")
+    col4, col5 = st.columns(2)
+    
+    with col4:
+        show_bars = st.checkbox("Show Bars", value=True) 
+
+    with col5:
+        show_line = st.checkbox("Show Line (Number of deals)", value=True)
+    
+    # Function to format currency values
+    def format_currency(value):
+        if value >= 1e9:
+            val = value / 1e9
+            if val >= 100:
+                return f'£{int(val)}b'
+            elif val >= 10:
+                formatted = f'£{val:.1f}b'.rstrip('0').rstrip('.')
+                return formatted
+            else:
+                formatted = f'£{val:.2f}b'.rstrip('0').rstrip('.')
+                return formatted
+        elif value >= 1e6:
+            val = value / 1e6
+            if val >= 100:
+                return f'£{int(val)}m'
+            elif val >= 10:
+                formatted = f'£{val:.1f}m'
+                if formatted.endswith('.0m'):
+                    formatted = formatted.replace('.0m', 'm')
+                return formatted
+            else:
+                formatted = f'£{val:.2f}m'
+                if formatted.endswith('.0m'):
+                    formatted = formatted.replace('.0m', 'm')
+                else:
+                    formatted = formatted.rstrip('0').rstrip('.')
+                return formatted
+        elif value >= 1e3:
+            val = value / 1e3
+            if val >= 100:
+                return f'£{int(val)}k'
+            elif val >= 10:
+                formatted = f'£{val:.1f}k'
+                if formatted.endswith('.0k'):
+                    formatted = formatted.replace('.0k', 'k')
+                return formatted
+            else:
+                formatted = f'£{val:.2f}k'
+                if formatted.endswith('.0k'):
+                    formatted = formatted.replace('.0k', 'k')
+                else:
+                    formatted = formatted.rstrip('0').rstrip('.')
+                return formatted
+        else:
+            return f'£{value:.2f}'
+
+    # MODIFIED: Moved "Generate Chart" button below inputs
+    if st.button("Generate Chart", type="primary"):
+        # Process the data
+        start_year, end_year = year_range
+        chart_data = data[data[date_column].dt.year.between(start_year, end_year, inclusive='both')].copy()
+        
+        if chart_data.empty:
+            st.error(f"No data available for the selected year range: {start_year} - {end_year}")
+            st.stop()
+            
+        # Extract year or appropriate time period from date
+        chart_data['time_period'] = chart_data[date_column].dt.year
+        
+        # Group data based on whether category is selected
+        if category_column != 'None':
+            # Group by time period and category
+            grouped = chart_data.groupby(['time_period', category_column]).agg({
+                value_column: 'sum'
+            }).reset_index()
+            
+            # Count rows per time period
+            row_counts = chart_data.groupby('time_period').size().reset_index(name='row_count')
+            
+            # Pivot to get categories as columns
+            pivot_data = grouped.pivot(index='time_period', columns=category_column, values=value_column).fillna(0)
+            
+            # Merge with row counts
+            final_data = pivot_data.reset_index()
+            final_data = final_data.merge(row_counts, on='time_period')
+            
+        else:
+            # Group by time period only
+            grouped = chart_data.groupby('time_period').agg({
+                value_column: 'sum'
+            }).reset_index()
+            
+            # Count rows per time period
+            row_counts = chart_data.groupby('time_period').size().reset_index(name='row_count')
+            
+            # Merge
+            final_data = grouped.merge(row_counts, on='time_period')
+        
+        st.success("Data processed successfully!")
+        st.dataframe(final_data.head())
+        
+        # Create the chart
+        chart_fig, chart_ax1 = plt.subplots(figsize=(10, 8))
+        
+        # Bar width 0.8
+        bar_width = 0.8
+        x_pos = np.arange(len(final_data))
+        
+        # Calculate dynamic font size based on bar width
+        fig_width = chart_fig.get_figwidth()
+        ax_bbox = chart_ax1.get_position()
+        ax_width_inches = fig_width * ax_bbox.width
+        bar_width_inches = (ax_width_inches / len(final_data)) * bar_width
+        
+        # Stronger scaling factor (16) for dynamic font size
+        dynamic_font_size = max(9, min(24, int(bar_width_inches * 16))) 
+        
+        # Identify category columns if they exist (used for y_max and color logic later)
+        category_cols = []
+        if category_column != 'None':
+            category_cols = [col for col in final_data.columns if col not in ['time_period', 'row_count']]
+
+        # Calculate y_max for plot limits and vertical offset
+        if category_column == 'None':
+            y_max = final_data[value_column].max()
+        else:
+            # Sum the new category columns to get the total height of the tallest bar
+            y_max = final_data[category_cols].sum(axis=1).max()
+
+        # Define the fixed vertical offset for single bar labels
+        vertical_offset = y_max * 0.005 # A very small percentage for 'just slightly above the bottom'
+        
+        # Determine if we have categories or not
+        if category_column != 'None':
+            # Define colors for stacked bars (starting with light purple)
+            colors = ['#EDD9E4', '#6F2A58', '#A8D5BA', '#FF6B6B', '#4ECDC4', '#FFE66D']
+            
+            if show_bars:
+                # Create stacked bars
+                bottom = np.zeros(len(final_data))
+                for idx, cat in enumerate(category_cols):
+                    color = colors[idx % len(colors)]
+                    chart_ax1.bar(x_pos, final_data[cat], bar_width, bottom=bottom, 
+                                label=cat, color=color, alpha=1.0)
+                    
+                    # Add labels to each bar segment
+                    for i, x in enumerate(x_pos):
+                        val = final_data[cat].iloc[i]
+                        if val > 0:
+                            label_text = format_currency(val)
+                            y_pos = bottom[i] + val / 2
+                            
+                            # Custom contrast logic: dark purple gets light text, all others get black
+                            current_color = colors[idx % len(colors)]
+                            if current_color == '#6F2A58': 
+                                text_color = '#D3D3D3' # Light Grey for the dark purple
+                            else:
+                                text_color = 'black'
+                                
+                            # Font weight is 600 (Semi Bold)
+                            chart_ax1.text(x, y_pos, label_text, ha='center', va='center',
+                                    fontsize=dynamic_font_size, fontfamily='Public Sans', fontweight=600, color=text_color)
+                    
+                    bottom += final_data[cat].values
+        else:
+            # Single bar without categories (use light purple as default)
+            if show_bars:
+                chart_ax1.bar(x_pos, final_data[value_column], bar_width, 
+                            label='Amount raised', color='#EDD9E4', alpha=1.0)
+                
+                # Add labels to bars
+                # Baseline position is the fixed offset for 'just slightly above the bottom'
+                baseline_position = vertical_offset 
+                for i, x in enumerate(x_pos):
+                    val = final_data[value_column].iloc[i]
+                    if val > 0:
+                        label_text = format_currency(val)
+                        # Alignment is ha='center' 
+                        # Font weight is 600 (Semi Bold)
+                        chart_ax1.text(x, baseline_position, label_text, ha='center', va='bottom',
+                                fontsize=dynamic_font_size, fontfamily='Public Sans', fontweight=600, color='black')
+        
+        # Set up x-axis
+        chart_ax1.set_xticks(x_pos)
+        
+        # Ensure year labels use dynamic font size
+        chart_ax1.set_xticklabels(final_data['time_period'])
+        
+        # Set font properties for X-axis ticks (Year)
+        plt.setp(chart_ax1.get_xticklabels(),
+                 fontsize=dynamic_font_size, # Ensures size matches the values/numbers
+                 fontfamily='Public Sans',
+                 fontweight='normal') # Set to normal weight (not bold)
+        
+        chart_ax1.tick_params(axis='y', labelsize=10, left=False, labelleft=False, 
+                            right=False, labelright=False, length=0)
+                            
+        # Increased pad value to push year labels further down from the bars
+        chart_ax1.tick_params(axis='x', labelsize=12, bottom=False, length=0, pad=10)
+        
+        # Remove spines
+        chart_ax1.spines['top'].set_visible(False)
+        chart_ax1.spines['right'].set_visible(False)
+        chart_ax1.spines['left'].set_visible(False)
+        chart_ax1.spines['bottom'].set_visible(False)
+        chart_ax1.grid(False)
+        
+        # Create second y-axis for row count line
+        if show_line:
+            chart_ax2 = chart_ax1.twinx()
+            chart_ax2.plot(x_pos, final_data['row_count'], color='black', 
+                        marker='o', linewidth=1.0, markersize=5, label='Number of deals')
+            chart_ax2.tick_params(axis='y', labelsize=10, right=False, labelright=False, 
+                                left=False, labelleft=False, length=0)
+            chart_ax2.set_ylim(0, final_data['row_count'].max() * 1.5)
+            
+            # Get category columns for contrast check (if categories are used)
+            if category_column != 'None':
+                colors = ['#EDD9E4', '#6F2A58', '#A8D5BA', '#FF6B6B', '#4ECDC4', '#FFE66D']
+                dark_color_index = colors.index('#6F2A58') if '#6F2A58' in colors else -1 # Check which index corresponds to the dark color
+            
+            # Add labels to line points
+            for i, (x, y) in enumerate(zip(x_pos, final_data['row_count'])):
+                # Determine if label should go above or below
+                place_below = False
+                if i < len(final_data) - 1:
+                    if final_data['row_count'].iloc[i+1] > y:
+                        place_below = True
+                if i > 0:
+                    if final_data['row_count'].iloc[i-1] > y:
+                        place_below = True
+                
+                # Apply contrast logic for line label: Check if the segment under the line dot is the dark purple one.
+                text_color = 'black'
+                if category_column != 'None' and dark_color_index != -1:
+                    # Check if the dark purple segment is the one with the highest value for this X-position
+                    segment_values = final_data[category_cols].iloc[i]
+                    if segment_values.idxmax() == category_cols[dark_color_index]:
+                         text_color = '#D3D3D3' # Light Grey
+                
+                # Calculate offset
+                y_range = chart_ax2.get_ylim()[1] - chart_ax2.get_ylim()[0]
+                offset = y_range * 0.02
+                
+                # Font weight is 600 (Semi Bold)
+                if place_below:
+                    chart_ax2.text(x, y - offset, str(y), ha='center', va='top', fontsize=dynamic_font_size, 
+                            fontfamily='Public Sans', color=text_color, fontweight=600)
+                else:
+                    chart_ax2.text(x, y + offset, str(y), ha='center', va='bottom', fontsize=dynamic_font_size, 
+                            fontfamily='Public Sans', color=text_color, fontweight=600)
+            
+            # Remove spines for second axis
+            chart_ax2.spines['top'].set_visible(False)
+            chart_ax2.spines['right'].set_visible(False)
+            chart_ax2.spines['left'].set_visible(False)
+            chart_ax2.spines['bottom'].set_visible(False)
+        
+        # Create custom legend with circles
+        legend_elements = []
+        if show_bars:
+            if category_column != 'None':
+                category_cols = [col for col in final_data.columns if col not in ['time_period', 'row_count']]
+                colors = ['#EDD9E4', '#6F2A58', '#A8D5BA', '#FF6B6B', '#4ECDC4', '#FFE66D']
+                for idx, cat in enumerate(category_cols):
+                    color = colors[idx % len(colors)]
+                    legend_elements.append(Line2D([0], [0], marker='o', color='w', 
+                                    markerfacecolor=color, markersize=10, label=cat))
+            else:
+                legend_elements.append(Line2D([0], [0], marker='o', color='w', 
+                                    markerfacecolor='#EDD9E4', markersize=10, label='Amount raised'))
+        
+        if show_line:
+            legend_elements.append(Line2D([0], [0], marker='o', color='w', 
+                                    markerfacecolor='black', markersize=10, label='Number of deals'))
+        
+        # Legend is not semi-bold
+        chart_ax1.legend(handles=legend_elements, loc='upper left', fontsize=18, frameon=False, 
+                    prop={'family': 'Public Sans', 'weight': 'normal'}, labelspacing=1.2)
+        
+        # Title uses fontweight=600 (Semi Bold)
+        plt.title('Data Visualization', fontsize=14, fontweight=600, pad=20, fontfamily='Public Sans')
+        plt.tight_layout()
+        
+        # Display the chart in Streamlit
+        st.pyplot(chart_fig)
+        
+        # MODIFIED: Download buttons moved below the chart
+        st.subheader("Download Options")
+        col_download1, col_download2 = st.columns(2)
+        
+        with col_download1:
+            # PNG download
+            buf_png = BytesIO()
+            chart_fig.savefig(buf_png, format='png', dpi=300, bbox_inches='tight')
+            buf_png.seek(0)
+            
+            st.download_button(
+                label="Download Chart as PNG",
+                data=buf_png,
+                file_name="chart.png",
+                mime="image/png"
+            )
+        
+        with col_download2:
+            # SVG download
+            buf_svg = BytesIO()
+            chart_fig.savefig(buf_svg, format='svg', bbox_inches='tight')
+            buf_svg.seek(0)
+            
+            st.download_button(
+                label="Download Chart as SVG",
+                data=buf_svg,
+                file_name="chart.svg",
+                mime="image/svg+xml"
+            )
