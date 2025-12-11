@@ -179,13 +179,13 @@ if uploaded_file is not None:
         bar_width = 0.6
         x_pos = np.arange(len(final_data))
         
-        # Calculate dynamic font size based on bar width
+        # Calculate dynamic font size based on bar width (Aggressive scaling for better visibility)
         fig_width = chart_fig.get_figwidth()
         ax_bbox = chart_ax1.get_position()
         ax_width_inches = fig_width * ax_bbox.width
         bar_width_inches = (ax_width_inches / len(final_data)) * bar_width
         
-        # MODIFIED: Increased scaling factor (10 -> 15) and cap (18 -> 20) to ensure larger, more noticeable font size relative to bar width.
+        # Stronger scaling factor (15) for dynamic font size
         dynamic_font_size = max(9, min(20, int(bar_width_inches * 15))) 
         
         # Identify category columns if they exist (used for y_max and color logic later)
@@ -230,7 +230,7 @@ if uploaded_file is not None:
                             else:
                                 text_color = 'black'
                                 
-                            # Font size is dynamic_font_size (matching other labels)
+                            # Alignment is ha='center' for stacked bars
                             chart_ax1.text(x, y_pos, label_text, ha='center', va='center',
                                     fontsize=dynamic_font_size, fontfamily='Public Sans', fontweight=600, color=text_color)
                     
@@ -248,12 +248,12 @@ if uploaded_file is not None:
                     val = final_data[value_column].iloc[i]
                     if val > 0:
                         label_text = format_currency(val)
-                        # Calculate x position for the left edge of the bar
-                        x_left = x - bar_width / 2
                         
-                        # Aligned to the left edge (x_left), no padding
-                        chart_ax1.text(x_left, baseline_position, label_text, ha='left', va='bottom',
+                        # --- MODIFIED ALIGNMENT (CENTER) ---
+                        # Align to the center of the bar (x)
+                        chart_ax1.text(x, baseline_position, label_text, ha='center', va='bottom',
                                 fontsize=dynamic_font_size, fontfamily='Public Sans', fontweight=600, color='black')
+                        # --- END MODIFIED ALIGNMENT ---
         
         # Set up x-axis
         chart_ax1.set_xticks(x_pos)
@@ -261,8 +261,9 @@ if uploaded_file is not None:
         # Ensure year labels use dynamic font size
         chart_ax1.set_xticklabels(final_data['time_period'])
         
+        # Set font properties for X-axis ticks (Year)
         plt.setp(chart_ax1.get_xticklabels(),
-                 fontsize=dynamic_font_size, # This ensures the size matches the values/numbers
+                 fontsize=dynamic_font_size, # Ensures size matches the values/numbers
                  fontfamily='Public Sans',
                  fontweight='normal')
         
