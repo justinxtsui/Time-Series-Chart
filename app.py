@@ -14,9 +14,9 @@ VALUE_COLUMN = 'Amount raised (converted to GBP)'
 ALT_DATE_COLUMN = 'Date the participant received the grant'
 ALT_VALUE_COLUMN = 'Amount received (converted to GBP)'
 # Define the color palette for categories
-CATEGORY_COLORS = ['#302A7E', '#8884B3', '#D0CCE5', '#5C5799', '#B4B1CE', '#E0DEE9']
+# UPDATED: Replaced first two default colors with user's specific shades
+CATEGORY_COLORS = ['#8C8AED', '#BBBAF6', '#D0CCE5', '#5C5799', '#B4B1CE', '#E0DEE9']
 # Define the default single bar color (third color in the palette for a lighter tone)
-# UPDATED: Reverted to use CATEGORY_COLORS[2] (#D0CCE5) for the light violet default
 SINGLE_BAR_COLOR = CATEGORY_COLORS[2] 
 # Define the line chart color
 LINE_COLOR = '#000000' # Black for high contrast
@@ -353,8 +353,8 @@ def generate_chart(final_data, category_column, show_bars, show_line, chart_titl
     legend_elements = []
     
     # Define large fixed size for markers and font
-    LEGEND_FONT_SIZE = DYNAMIC_FONT_SIZE # Match font size to dynamic bar label size
-    LEGEND_MARKER_SIZE = DYNAMIC_FONT_SIZE # Match marker size to dynamic font size
+    LEGEND_FONT_SIZE = 50 # Set fixed size to 50
+    LEGEND_MARKER_SIZE = 50 # Match marker size to font size
     
     if show_bars:
         if category_column != 'None':
@@ -375,8 +375,8 @@ def generate_chart(final_data, category_column, show_bars, show_line, chart_titl
         legend_elements.append(Line2D([0], [0], marker='o', color='w', 
                                       markerfacecolor=LINE_COLOR, markersize=LEGEND_MARKER_SIZE, label='Number of deals')) 
         
-    # **FINAL CHANGE:** Legend fontsize now uses DYNAMIC_FONT_SIZE
-    chart_ax1.legend(handles=legend_elements, loc='upper left', fontsize=LEGEND_FONT_SIZE, frameon=False, 
+    # **FINAL CHANGE:** Legend fontsize changed to 50 (LEGEND_SIZE)
+    chart_ax1.legend(handles=legend_elements, loc='upper left', fontsize=LEGEND_SIZE, frameon=False, 
                      prop={'weight': 'normal'}, labelspacing=1.0)
     
     # Matplotlib Chart Title: Color is TITLE_COLOR (Black)
@@ -708,8 +708,8 @@ else:
 
     1.  **Upload:** Provide your data file in the sidebar.
     2.  **Configure:** Use the controls under **'2. Chart Configuration'** to filter the time range, choose a category for stacking, and set the title.
-    3.  **Filter:** Use **'3. Data Filter'** to include or exclude specific data points based on column values.
-    4.  **View & Download:** The generated chart will appear instantly here, ready for high-resolution download in Section 4 of the sidebar.
+    3.  **Filter:** Use **'4. Data Filter'** to include or exclude specific data points based on column values.
+    4.  **View & Download:** The generated chart will appear instantly here, ready for high-resolution download in Section 5 of the sidebar.
     """)
 
     st.markdown("---")
