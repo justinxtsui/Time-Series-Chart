@@ -359,6 +359,9 @@ st.markdown(f'<h1 style="color:{APP_TITLE_COLOR};">Time Series Chart Generator</
 st.markdown("---")
 
 # Initialize buffers and session state
+# ----------------------------------------------------------------------
+# FIX: Initialize all session state keys to avoid the KeyError.
+# ----------------------------------------------------------------------
 if 'year_range' not in st.session_state:
     st.session_state['year_range'] = (1900, 2100)
     st.session_state['category_column'] = 'None'
@@ -371,6 +374,7 @@ if 'year_range' not in st.session_state:
     st.session_state['filter_column'] = 'None'
     st.session_state['filter_include'] = True
     st.session_state['filter_values'] = []
+# ----------------------------------------------------------------------
 
 
 # --- SIDEBAR (All Controls) ---
@@ -397,7 +401,7 @@ with st.sidebar:
         # 2A. Time Range Selection
         st.subheader("Time Filters")
         min_year = int(df_base[DATE_COLUMN].dt.year.min())
-        max_year = int(df_base[DATE_COLUMN].dt.year.max())
+        max_year = int(df[DATE_COLUMN].dt.year.max())
         all_years = list(range(min_year, max_year + 1))
         
         default_start = min_year
@@ -484,12 +488,14 @@ with st.sidebar:
         st.markdown("---")
         st.header("3. Data Filter")
 
+        # Line 487 fix implemented here: st.session_state['filter_enabled'] is guaranteed to exist.
         filter_enabled = st.checkbox('Enable Data Filtering', value=st.session_state['filter_enabled'])
         st.session_state['filter_enabled'] = filter_enabled
 
         if filter_enabled:
             
-            filter_columns = ['None'] + sorted([c for c in df_base.columns if df_base[c].dtype in ['object', 'category'] and c not in [DATE_COLUMN]])
+            filter_columns = [c for c in df_base.columns if df_base[c].dtype in ['object', 'category'] and c not in [DATE_COLUMN]]
+            filter_columns = ['None'] + sorted(filter_columns)
             
             filter_column = st.selectbox(
                 "Select Column to Filter",
@@ -513,10 +519,13 @@ with st.sidebar:
                 
                 st.session_state['filter_include'] = (filter_mode == "Include selected values")
                 
+                # Use default from session state or all unique values if first run
+                default_selection = st.session_state['filter_values'] if st.session_state['filter_values'] else unique_values
+                
                 selected_values = st.multiselect(
                     f"Select values in '{filter_column}'",
                     options=unique_values,
-                    default=st.session_state['filter_values'] if st.session_state['filter_values'] else unique_values,
+                    default=[v for v in default_selection if v in unique_values], # Ensure defaults are valid options
                     key='filter_values_selector'
                 )
                 st.session_state['filter_values'] = selected_values
@@ -603,7 +612,7 @@ else:
 
     1.  **Upload:** Provide your data file in the sidebar.
     2.  **Configure:** Use the controls under **'2. Chart Configuration'** to filter the time range, choose a category for stacking, and set the title.
-    3.  **Filter (New!):** Use **'3. Data Filter'** to include or exclude specific data points based on column values.
+    3.  **Filter:** Use **'3. Data Filter'** to include or exclude specific data points based on column values.
     4.  **View & Download:** The generated chart will appear instantly here, ready for high-resolution download in Section 4 of the sidebar.
     """)
 
@@ -614,3 +623,4 @@ else:
     * **Date Column:** `{DATE_COLUMN}` (e.g., '2023-01-15')
     * **Value Column:** `{VALUE_COLUMN}` (e.g., '150000')
     """)
+    
