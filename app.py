@@ -185,10 +185,8 @@ if uploaded_file is not None:
         ax_width_inches = fig_width * ax_bbox.width
         bar_width_inches = (ax_width_inches / len(final_data)) * bar_width
         
-        # TEMPORARY FIX: Hardcode dynamic_font_size to 20 for testing visibility, and 16 for X-axis.
-        # This size should now be visibly large.
-        dynamic_font_size = 20
-        x_axis_font_size = 16 
+        # MODIFIED: Increased scaling factor (10 -> 15) and cap (18 -> 20) to ensure larger, more noticeable font size relative to bar width.
+        dynamic_font_size = max(9, min(20, int(bar_width_inches * 15))) 
         
         # Identify category columns if they exist (used for y_max and color logic later)
         category_cols = []
@@ -232,7 +230,7 @@ if uploaded_file is not None:
                             else:
                                 text_color = 'black'
                                 
-                            # Font size is dynamic_font_size 
+                            # Font size is dynamic_font_size (matching other labels)
                             chart_ax1.text(x, y_pos, label_text, ha='center', va='center',
                                     fontsize=dynamic_font_size, fontfamily='Public Sans', fontweight=600, color=text_color)
                     
@@ -264,7 +262,7 @@ if uploaded_file is not None:
         chart_ax1.set_xticklabels(final_data['time_period'])
         
         plt.setp(chart_ax1.get_xticklabels(),
-                 fontsize=x_axis_font_size, # This uses the temporary fixed larger size
+                 fontsize=dynamic_font_size, # This ensures the size matches the values/numbers
                  fontfamily='Public Sans',
                  fontweight='normal')
         
@@ -316,7 +314,7 @@ if uploaded_file is not None:
                 y_range = chart_ax2.get_ylim()[1] - chart_ax2.get_ylim()[0]
                 offset = y_range * 0.02
                 
-                # Font size is dynamic_font_size 
+                # Font size is dynamic_font_size (matching other labels)
                 if place_below:
                     chart_ax2.text(x, y - offset, str(y), ha='center', va='top', fontsize=dynamic_font_size, 
                             fontfamily='Public Sans', color=text_color, fontweight=600)
