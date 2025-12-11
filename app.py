@@ -205,48 +205,43 @@ def generate_chart(final_data, category_column, show_bars, show_line, chart_titl
             spine.set_visible(False)
             
         y_range = chart_ax2.get_ylim()[1] - chart_ax2.get_ylim()[0]
-        # Use a slightly larger offset for better clearance
         base_offset = y_range * 0.025 
         
-        # --- IMPROVED LINE LABEL PLACEMENT LOGIC (Default: BELOW) ---
+        # --- SLOPE-BASED LINE LABEL PLACEMENT LOGIC ---
         for i, (x, y) in enumerate(zip(x_pos, line_data)):
             
-            place_above = False # Default to placing label BELOW (va='top')
+            # Default placement is based on the *next* segment's slope
             
-            # --- Peak/Valley Logic ---
-            if len(line_data) > 1:
-                # Local Peak Check: Is this point higher than both neighbors? (Force label BELOW)
-                is_local_peak = True
-                if i > 0 and y < line_data.iloc[i-1]:
-                    is_local_peak = False
-                if i < len(line_data) - 1 and y < line_data.iloc[i+1]:
-                    is_local_peak = False
-
-                # Local Valley Check: Is this point significantly lower than both neighbors? (Force label ABOVE)
-                is_local_valley = True
-                if i > 0 and y > line_data.iloc[i-1] * 0.9: # Lower than 90% of neighbor
-                    is_local_valley = False
-                if i < len(line_data) - 1 and y > line_data.iloc[i+1] * 0.9:
-                    is_local_valley = False
+            if i < len(line_data) - 1:
+                y_next = line_data.iloc[i+1]
                 
-                if i == 0 or i == len(line_data) - 1:
-                    # Ignore valley/peak check for single neighbor endpoints
-                    pass
-                elif is_local_valley:
-                    place_above = True # Valley: put label ABOVE
-                elif is_local_peak:
-                    place_above = False # Peak: put label BELOW (Default)
-
-
-            # Determine final position based on flip status
-            if place_above:
-                # Place ABOVE the dot (va='bottom', text sits on top of y_pos)
-                va = 'bottom'
-                y_pos = y + base_offset
+                if y_next >= y:
+                    # Rising or Flat slope: Place label ABOVE the current dot
+                    va = 'bottom' # Text sits on top of y_pos
+                    y_pos = y + base_offset
+                else:
+                    # Falling slope: Place label BELOW the current dot
+                    va = 'top' # Text hangs below y_pos
+                    y_pos = y - base_offset
             else:
-                # Default: Place BELOW the dot (va='top', text hangs below y_pos)
-                va = 'top' 
-                y_pos = y - base_offset
+                # Last point: No next segment to determine slope.
+                # Use the slope of the *previous* segment for consistency.
+                if i > 0:
+                    y_prev = line_data.iloc[i-1]
+                    
+                    if y >= y_prev:
+                        # Rising or Flat segment coming in: Place label ABOVE
+                        va = 'bottom' 
+                        y_pos = y + base_offset
+                    else:
+                        # Falling segment coming in: Place label BELOW
+                        va = 'top' 
+                        y_pos = y - base_offset
+                else:
+                    # Only one point: Default to ABOVE
+                    va = 'bottom'
+                    y_pos = y + base_offset
+
             
             chart_ax2.text(x, y_pos, str(int(y)), ha='center', va=va, fontsize=dynamic_font_size, 
                            color=LINE_COLOR, fontweight='bold')
