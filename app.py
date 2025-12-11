@@ -233,7 +233,7 @@ def generate_chart(final_data, category_column, show_bars, show_line):
     chart_ax1.legend(handles=legend_elements, loc='upper left', fontsize=12, frameon=False, 
                      prop={'weight': 'normal'}, labelspacing=1.0)
     
-    plt.title('Grant Funding and Deal Count Over Time', fontsize=18, fontweight='bold', pad=20)
+    plt.title('Data Visualization', fontsize=18, fontweight='bold', pad=20)
     plt.tight_layout()
     
     return chart_fig
@@ -241,15 +241,18 @@ def generate_chart(final_data, category_column, show_bars, show_line):
 # --- STREAMLIT APP LAYOUT ---
 
 st.title("📊 Dynamic Grant Funding Chart Generator")
-st.markdown("""
-Easily visualize the **Amount Received (converted to GBP)** aggregated by year,
-optionally broken down by a category column, alongside the **Number of Deals** (rows).
-""")
 st.markdown("---")
 
-# Initialize buffers for downloads
+# Initialize buffers and session state
 buf_png = BytesIO()
 buf_svg = BytesIO()
+if 'year_range' not in st.session_state:
+    st.session_state['year_range'] = (1900, 2100)
+    st.session_state['category_column'] = 'None'
+    st.session_state['show_bars'] = True
+    st.session_state['show_line'] = True
+    st.session_state['buf_png'] = BytesIO()
+    st.session_state['buf_svg'] = BytesIO()
 
 # Use a sidebar for controls
 with st.sidebar:
@@ -269,36 +272,72 @@ with st.sidebar:
         st.markdown("---")
         st.header("2. Configure Visualization")
         
-        # --- Year Range Selection ---
-        min_year = df[DATE_COLUMN].dt.year.min()
-        max_year = df[DATE_COLUMN].dt.year.max()
+        # --- New Year Selection (Start/End Select Boxes) ---
+        min_year = int(df[DATE_COLUMN].dt.year.min())
+        max_year = int(df[DATE_COLUMN].dt.year.max())
+        all_years = list(range(min_year, max_year + 1))
         
-        if pd.isna(min_year) or pd.isna(max_year):
-             st.warning("No valid dates found for year selection.")
-             year_range = (2000, 2024)
-        else:
-            year_range = st.slider(
-                "Select Year Range",
-                min_value=int(min_year),
-                max_value=int(max_year),
-                value=(int(min_year), int(max_year)),
-                step=1
+        # Determine initial selection defaults
+        default_start = min_year
+        default_end = max_year
+        
+        # Retrieve or set current session state values
+        current_start, current_end = st.session_state.get('year_range', (default_start, default_end))
+        
+        col_start, col_end = st.columns(2)
+        
+        with col_start:
+            # Set the index based on the current session state value
+            start_year = st.selectbox(
+                "Select Start Year",
+                options=all_years,
+                index=all_years.index(current_start) if current_start in all_years else 0,
+                key='start_year_selector'
             )
             
+        with col_end:
+            # Set the index based on the current session state value
+            end_year = st.selectbox(
+                "Select End Year",
+                options=all_years,
+                index=all_years.index(current_end) if current_end in all_years else len(all_years) - 1,
+                key='end_year_selector'
+            )
+            
+        # Validate selection
+        if start_year > end_year:
+            st.error("Start Year must be less than or equal to End Year.")
+            st.stop()
+            
+        year_range = (start_year, end_year)
+        
         # --- Category Column Selection ---
         category_columns = ['None'] + sorted([col for col in df.columns if col not in [DATE_COLUMN, VALUE_COLUMN]])
-        category_column = st.selectbox("Select Category Column (Splits bars)", category_columns)
+        category_column = st.selectbox(
+            "Select Category Column (Splits bars)", 
+            category_columns,
+            index=category_columns.index(st.session_state.get('category_column', 'None')),
+            key='category_col_selector'
+        )
 
         # --- Display Options ---
         st.subheader("Chart Elements")
-        show_bars = st.checkbox("Show Total Grant Amount Bars", value=True)
-        show_line = st.checkbox("Show Deal Count Line", value=True)
+        show_bars = st.checkbox(
+            "Show Total Grant Amount Bars", 
+            value=st.session_state.get('show_bars', True), 
+            key='show_bars_selector'
+        )
+        show_line = st.checkbox(
+            "Show Deal Count Line", 
+            value=st.session_state.get('show_line', True), 
+            key='show_line_selector'
+        )
         
         if not show_bars and not show_line:
             st.warning("Please select at least one element (Bars or Line) to display the chart.")
             st.stop()
         
-        # Store these variables for the main loop
+        # Update session state with new values
         st.session_state['year_range'] = year_range
         st.session_state['category_column'] = category_column
         st.session_state['show_bars'] = show_bars
@@ -308,7 +347,6 @@ with st.sidebar:
         st.markdown("---")
         st.header("3. Download Chart ⬇️")
         
-        # These buttons will be populated later after the chart is generated
         st.download_button(
             label="Download Chart as **PNG** 🖼️",
             data=st.session_state.get('buf_png', BytesIO()),
@@ -332,10 +370,10 @@ with st.sidebar:
 if df is not None:
     
     # Retrieve parameters from session state
-    year_range = st.session_state.get('year_range')
-    category_column = st.session_state.get('category_column')
-    show_bars = st.session_state.get('show_bars')
-    show_line = st.session_state.get('show_line')
+    year_range = st.session_state['year_range']
+    category_column = st.session_state['category_column']
+    show_bars = st.session_state['show_bars']
+    show_line = st.session_state['show_line']
     
     # Process the data
     final_data, process_error = process_data(df, year_range, category_column)
@@ -347,7 +385,6 @@ if df is not None:
     # Generate the chart
     chart_fig = generate_chart(final_data, category_column, show_bars, show_line)
 
-    st.subheader("Generated Chart")
     st.pyplot(chart_fig, use_container_width=True)
     
     # --- Export Figure to Buffers (to update sidebar download buttons) ---
@@ -356,14 +393,10 @@ if df is not None:
     buf_png = BytesIO()
     chart_fig.savefig(buf_png, format='png', dpi=300, bbox_inches='tight')
     buf_png.seek(0)
-    st.session_state['buf_png'] = buf_png # Update session state
+    st.session_state['buf_png'] = buf_png
 
     # SVG
     buf_svg = BytesIO()
     chart_fig.savefig(buf_svg, format='svg', bbox_inches='tight')
     buf_svg.seek(0)
-    st.session_state['buf_svg'] = buf_svg # Update session state
-    
-    # Rerunning helps ensure the download buttons are active if this is the first run
-    # Since st.pyplot is called, a rerun is often triggered automatically, but this ensures state is updated.
-    # Note: Streamlit handles the refresh loop, the download buttons in the sidebar should now work.
+    st.session_state['buf_svg'] = buf_svg
