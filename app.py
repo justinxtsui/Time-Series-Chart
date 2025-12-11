@@ -229,6 +229,7 @@ if uploaded_file is not None:
                             else:
                                 text_color = 'black'
                                 
+                            # Font size is dynamic_font_size (matching other labels)
                             chart_ax1.text(x, y_pos, label_text, ha='center', va='center',
                                     fontsize=dynamic_font_size, fontfamily='Public Sans', fontweight=600, color=text_color)
                     
@@ -246,25 +247,23 @@ if uploaded_file is not None:
                     val = final_data[value_column].iloc[i]
                     if val > 0:
                         label_text = format_currency(val)
-                        # Calculate x position for the left edge of the bar and add padding
+                        # Calculate x position for the left edge of the bar
                         x_left = x - bar_width / 2
                         
-                        chart_ax1.text(x_left + (bar_width * 0.05), baseline_position, label_text, ha='left', va='bottom',
+                        # MODIFIED: Removed padding (bar_width * 0.05) to push label close to the left edge, maximizing fill.
+                        chart_ax1.text(x_left, baseline_position, label_text, ha='left', va='bottom',
                                 fontsize=dynamic_font_size, fontfamily='Public Sans', fontweight=600, color='black')
         
         # Set up x-axis
         chart_ax1.set_xticks(x_pos)
         
-        # --- MODIFIED BLOCK FOR X-AXIS LABELS ---
-        # Set tick labels (years)
+        # Ensure year labels use dynamic font size
         chart_ax1.set_xticklabels(final_data['time_period'])
         
-        # Explicitly set the font size/style on the tick objects to ensure consistency
         plt.setp(chart_ax1.get_xticklabels(),
-                 fontsize=dynamic_font_size,
+                 fontsize=dynamic_font_size, # This ensures the size matches the values/numbers
                  fontfamily='Public Sans',
                  fontweight='normal')
-        # --- END MODIFIED BLOCK ---
         
         chart_ax1.tick_params(axis='y', labelsize=10, left=False, labelleft=False, 
                             right=False, labelright=False, length=0)
@@ -314,6 +313,7 @@ if uploaded_file is not None:
                 y_range = chart_ax2.get_ylim()[1] - chart_ax2.get_ylim()[0]
                 offset = y_range * 0.02
                 
+                # Font size is dynamic_font_size (matching other labels)
                 if place_below:
                     chart_ax2.text(x, y - offset, str(y), ha='center', va='top', fontsize=dynamic_font_size, 
                             fontfamily='Public Sans', color=text_color, fontweight=600)
