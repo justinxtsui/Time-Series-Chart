@@ -16,8 +16,10 @@ CATEGORY_COLORS = ['#302A7E', '#8884B3', '#D0CCE5', '#5C5799', '#B4B1CE', '#E0DE
 SINGLE_BAR_COLOR = CATEGORY_COLORS[2]
 # Define the line chart color
 LINE_COLOR = '#000000' # Black for high contrast
-# Define the chart title color
-TITLE_COLOR = '#6F2A58' # Dark Berry for the title (UPDATED)
+# Define the chart title color (for Matplotlib chart)
+TITLE_COLOR = '#6F2A58' # Dark Berry for the Matplotlib chart title
+# Define the Application Title Color (for st.markdown)
+APP_TITLE_COLOR = '#6F2A58' # Dark Berry for the Streamlit Title (NEW)
 # Default Title
 DEFAULT_TITLE = 'Grant Funding and Deal Count Over Time'
 
@@ -323,8 +325,7 @@ def generate_chart(final_data, category_column, show_bars, show_line, chart_titl
     chart_ax1.legend(handles=legend_elements, loc='upper left', fontsize=12, frameon=False, 
                      prop={'weight': 'normal'}, labelspacing=1.0)
     
-    # Use the custom title here
-    # UPDATED: color=TITLE_COLOR (Dark Berry)
+    # Matplotlib Chart Title: Color is TITLE_COLOR (Dark Berry)
     plt.title(chart_title, fontsize=18, fontweight='bold', pad=20, color=TITLE_COLOR)
     plt.tight_layout()
     
@@ -332,7 +333,8 @@ def generate_chart(final_data, category_column, show_bars, show_line, chart_titl
 
 # --- STREAMLIT APP LAYOUT ---
 
-st.title("Time Series Chart Generator")
+# CHANGED: Replaced st.title() with st.markdown() for custom color
+st.markdown(f'<h1 style="color:{APP_TITLE_COLOR};">Time Series Chart Generator</h1>', unsafe_allow_html=True)
 st.markdown("---")
 
 # Initialize buffers and session state
