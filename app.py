@@ -368,8 +368,9 @@ def generate_chart(final_data, category_column, show_bars, show_line, chart_titl
                                       markerfacecolor=LINE_COLOR, markersize=LEGEND_MARKER_SIZE, label='Number of deals')) 
         
     # Legend with increased font size and proportional markers
-    chart_ax1.legend(handles=legend_elements, loc='upper left', fontsize=LEGEND_FONT_SIZE, frameon=False, 
-                     prop={'weight': 'normal'}, labelspacing=1.0)
+    chart_ax1.legend(handles=legend_elements, loc='upper left', 
+                     prop={'size': LEGEND_FONT_SIZE, 'weight': 'normal'}, 
+                     frameon=False, labelspacing=1.0)
     
     # Matplotlib Chart Title: Color is TITLE_COLOR (Black)
     plt.title(chart_title, fontsize=18, fontweight='bold', pad=20, color=TITLE_COLOR)
