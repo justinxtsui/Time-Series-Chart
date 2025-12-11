@@ -166,7 +166,7 @@ def process_data(df, year_range, category_column):
     return final_data, None
 
 
-def generate_chart(final_data, category_column, show_bars, show_line, chart_title, original_value_column='raised'):
+def generate_chart(final_data, category_column, show_bars, show_line, chart_title, original_value_column='raised', category_colors=None):
     """Generates the dual-axis Matplotlib chart."""
     # Matplotlib Figure Size (Increased for resolution)
     chart_fig, chart_ax1 = plt.subplots(figsize=(20, 10)) 
@@ -207,7 +207,12 @@ def generate_chart(final_data, category_column, show_bars, show_line, chart_titl
     if category_column != 'None':
         bottom = np.zeros(len(final_data))
         for idx, cat in enumerate(category_cols):
-            color = CATEGORY_COLORS[idx % len(CATEGORY_COLORS)]
+            # Use custom color if available, otherwise use default palette
+            if category_colors and cat in category_colors:
+                color = category_colors[cat]
+            else:
+                color = CATEGORY_COLORS[idx % len(CATEGORY_COLORS)]
+            
             if show_bars:
                 chart_ax1.bar(x_pos, final_data[cat], bar_width, bottom=bottom, 
                               label=cat, color=color, alpha=1.0)
@@ -363,7 +368,11 @@ def generate_chart(final_data, category_column, show_bars, show_line, chart_titl
     if show_bars:
         if category_column != 'None':
             for idx, cat in enumerate(category_cols):
-                color = CATEGORY_COLORS[idx % len(CATEGORY_COLORS)]
+                # Use custom color if available, otherwise use default palette
+                if category_colors and cat in category_colors:
+                    color = category_colors[cat]
+                else:
+                    color = CATEGORY_COLORS[idx % len(CATEGORY_COLORS)]
                 # Use proportional marker size
                 legend_elements.append(Line2D([0], [0], marker='o', color='w', 
                                               markerfacecolor=color, markersize=LEGEND_MARKER_SIZE, label=cat)) 
@@ -411,6 +420,7 @@ if 'year_range' not in st.session_state:
     st.session_state['filter_values'] = []
     st.session_state['original_value_column'] = 'raised'  # Default
     st.session_state['stacked_enabled'] = False  # Default
+    st.session_state['category_colors'] = {}  # Default
 
 
 # --- SIDEBAR (All Controls) ---
@@ -533,8 +543,33 @@ with st.sidebar:
                 help="Select a column to stack and color-code the bars."
             )
             st.session_state['category_column'] = category_column
+            
+            # Color picker for each category
+            if category_column != 'None':
+                st.subheader("Category Colors")
+                
+                # Get unique categories from the selected column
+                unique_categories = sorted(df_base[category_column].dropna().unique())
+                
+                # Initialize category_colors in session state if not exists
+                if 'category_colors' not in st.session_state:
+                    st.session_state['category_colors'] = {}
+                
+                # Create color pickers for each category
+                for idx, category in enumerate(unique_categories):
+                    # Use default color if not set
+                    default_color = CATEGORY_COLORS[idx % len(CATEGORY_COLORS)]
+                    current_color = st.session_state['category_colors'].get(category, default_color)
+                    
+                    selected_color = st.color_picker(
+                        f"Color for '{category}'",
+                        value=current_color,
+                        key=f'color_picker_{category}'
+                    )
+                    st.session_state['category_colors'][category] = selected_color
         else:
             st.session_state['category_column'] = 'None'
+            st.session_state['category_colors'] = {}
 
         # --- 6. DATA FILTER ---
         st.markdown("---")
@@ -636,7 +671,8 @@ if 'df_base' in locals() and df_base is not None:
     chart_fig = generate_chart(final_data, st.session_state['category_column'], 
                                st.session_state['show_bars'], st.session_state['show_line'], 
                                st.session_state['chart_title'], 
-                               st.session_state.get('original_value_column', 'raised'))
+                               st.session_state.get('original_value_column', 'raised'),
+                               st.session_state.get('category_colors', {}))
 
     # --- CHART CENTERING IMPROVEMENT ---
     # Centering and sizing adjustment: Minimized side margins ([0.05, 7, 0.05])
