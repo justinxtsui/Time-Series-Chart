@@ -24,7 +24,6 @@ APP_TITLE_COLOR = '#6F2A58'
 DEFAULT_TITLE = 'Grant Funding and Deal Count Over Time'
 
 # Set page config and general styles
-# IMPROVEMENT: Set theme to 'dark' and expanded layout for a modern, spacious feel
 st.set_page_config(page_title="Time Series Chart Generator", layout="wide", initial_sidebar_state="expanded")
 plt.rcParams['font.family'] = 'sans-serif'
 plt.rcParams['font.sans-serif'] = ['Arial', 'Public Sans', 'DejaVu Sans']
@@ -338,7 +337,7 @@ def generate_chart(final_data, category_column, show_bars, show_line, chart_titl
 
 # --- STREAMLIT APP LAYOUT ---
 
-# Streamlit App Title: Color is APP_TITLE_COLOR (Dark Berry)
+# 1. MAIN APPLICATION TITLE (Styled with consistent hierarchy)
 st.markdown(f'<h1 style="color:{APP_TITLE_COLOR};">Time Series Chart Generator</h1>', unsafe_allow_html=True)
 st.markdown("---")
 
@@ -352,9 +351,10 @@ if 'year_range' not in st.session_state:
     st.session_state['buf_png'] = BytesIO()
     st.session_state['buf_svg'] = BytesIO()
 
-# --- SIDEBAR (All Functions) ---
+# --- SIDEBAR (All Controls) ---
 with st.sidebar:
-    st.header("1️⃣ Data Source")
+    # UPDATED: Use H2 for consistent hierarchy
+    st.header("1. Data Source")
     # File Uploader
     uploaded_file = st.file_uploader("Upload your Excel or CSV file", type=['xlsx', 'xls', 'csv'], 
                                      help="The file must contain a date column and a value column.")
@@ -370,9 +370,10 @@ with st.sidebar:
         
     if df is not None:
         
-        # --- 2. CHART CONFIGURATION (Moved to Sidebar) ---
+        # --- 2. CHART CONFIGURATION ---
         st.markdown("---")
-        st.header("2️⃣ Chart Configuration")
+        # UPDATED: Use H2 for consistent hierarchy
+        st.header("2. Chart Configuration")
         
         # 2A. Time Range Selection
         st.subheader("Time Filters")
@@ -458,9 +459,12 @@ with st.sidebar:
         st.session_state['show_bars'] = show_bars
         st.session_state['show_line'] = show_line
         
-        # --- 3. DOWNLOAD SECTION (Consolidated) ---
+        # --- 3. DOWNLOAD SECTION ---
         st.markdown("---")
-        with st.expander("⬇️ Download Chart", expanded=True):
+        # UPDATED: Use H2 for consistent hierarchy
+        st.header("3. Download Chart")
+        
+        with st.expander("Download Options", expanded=True):
             st.caption("Download your generated chart file.")
             st.download_button(
                 label="Download as **PNG** (High-Res)",
@@ -484,7 +488,8 @@ with st.sidebar:
 
 if 'df' in locals() and df is not None:
     
-    st.header("3️⃣ Generated Time Series Chart")
+    # UPDATED: Use H2 for consistent hierarchy
+    st.header("Generated Time Series Chart")
     st.markdown("---")
 
     # Retrieve parameters from session state
@@ -504,7 +509,7 @@ if 'df' in locals() and df is not None:
     # Generate the chart
     chart_fig = generate_chart(final_data, category_column, show_bars, show_line, chart_title)
 
-    # Use a clean container for the chart display (IMPROVEMENT)
+    # Use a clean container for the chart display
     with st.container(border=True):
         st.pyplot(chart_fig, use_container_width=True)
     
@@ -523,23 +528,23 @@ if 'df' in locals() and df is not None:
     st.session_state['buf_svg'] = buf_svg
 
 else:
-    # Message for initial load (IMPROVEMENT: High-impact introduction)
-    st.info("⬆️ **Please upload your data file using the controls in the sidebar to begin chart configuration.**")
+    # Message for initial load (Cleaned up and professional)
+    st.info("⬆️ **Please upload your data file using the controls in the sidebar (Section 1) to begin chart configuration.**")
     st.markdown("---")
     
-    st.subheader("💡 How It Works")
+    st.subheader("How It Works")
     st.markdown("""
-    This generator allows you to create professional-quality time series charts showing value (bars) and count (line) over time.
+    This generator creates professional time series charts visualizing value (bars) and count (line) over time.
 
-    1.  **Upload:** Use the **1️⃣ Data Source** section in the sidebar.
-    2.  **Configure:** Set your date range, choose a category column to split your data, and customize the title under **2️⃣ Chart Configuration**.
-    3.  **View & Download:** Your chart will appear instantly here, ready for download in high resolution.
+    1.  **Upload:** Provide your data file in the sidebar.
+    2.  **Configure:** Use the controls under **'2. Chart Configuration'** to filter the time range, choose a category for stacking, and set the title.
+    3.  **View & Download:** The generated chart will appear instantly here, ready for high-resolution download in Section 3 of the sidebar.
     """)
 
     st.markdown("---")
     st.subheader("Expected Data Format")
     st.markdown(f"""
     Your file must contain, at minimum, these two columns:
-    * **Date Column:** `{DATE_COLUMN}` (must be parseable as a date)
-    * **Value Column:** `{VALUE_COLUMN}` (must be numeric, representing the amount/value)
+    * **Date Column:** `{DATE_COLUMN}` (e.g., '2023-01-15')
+    * **Value Column:** `{VALUE_COLUMN}` (e.g., '150000')
     """)
