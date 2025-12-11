@@ -238,9 +238,9 @@ if uploaded_file is not None:
                             # Better contrast logic using is_dark_color function
                             current_color = colors[idx % len(colors)]
                             if is_dark_color(current_color):
-                                text_color = 'white'  # Light text for dark backgrounds
+                                text_color = '#FFFFFF'  # Pure white for dark backgrounds
                             else:
-                                text_color = 'black'  # Dark text for light backgrounds
+                                text_color = '#000000'  # Pure black for light backgrounds
                             
                             # Special positioning for bottom segment (first category)
                             if idx == 0:
@@ -268,10 +268,15 @@ if uploaded_file is not None:
                     val = final_data[value_column].iloc[i]
                     if val > 0:
                         label_text = format_currency(val)
+                        # Check contrast for light purple background
+                        if is_dark_color('#EDD9E4'):
+                            text_color = '#FFFFFF'
+                        else:
+                            text_color = '#000000'
                         # Alignment is ha='center' 
                         # Font weight is 600 (Semi Bold)
                         chart_ax1.text(x, baseline_position, label_text, ha='center', va='bottom',
-                                fontsize=dynamic_font_size, fontfamily='Public Sans', fontweight=600, color='black')
+                                fontsize=dynamic_font_size, fontfamily='Public Sans', fontweight=600, color=text_color)
         
         # Set up x-axis
         chart_ax1.set_xticks(x_pos)
@@ -325,51 +330,75 @@ if uploaded_file is not None:
                         place_below = True
                 
                 # Determine text color based on position
-                text_color = 'black'  # Default for labels above (on white background)
+                text_color = '#000000'  # Default for labels above (on white background)
                 
+                # Calculate base offset
+                y_range = chart_ax2.get_ylim()[1] - chart_ax2.get_ylim()[0]
+                base_offset = y_range * 0.08  # Base offset for separation
+                
+                # Check for potential overlap with bar labels when placing below
                 if place_below and category_column != 'None':
-                    # Label is below the line point, potentially on a bar segment
-                    # Convert line y-position to bar chart scale to determine which segment
-                    # Get the bar values at this x position
+                    # Get the bar values at this x position to check for overlaps
                     bar_ax1_max = chart_ax1.get_ylim()[1]
                     line_ax2_max = chart_ax2.get_ylim()[1]
                     
-                    # Estimate where the line point sits relative to the bars
-                    # Line y-position as fraction of its axis
+                    # Convert line position to bar chart scale
                     line_fraction = y / line_ax2_max
-                    # Approximate bar y-position
                     approx_bar_y = line_fraction * bar_ax1_max
                     
-                    # Find which segment this falls into
+                    # Calculate where the label will be positioned
+                    label_position = y - base_offset
+                    label_position_bar_scale = (label_position / line_ax2_max) * bar_ax1_max
+                    
+                    # Check each bar segment to see if label would overlap
                     cumulative_height = 0
+                    needs_extra_offset = False
                     for seg_idx, cat in enumerate(category_cols):
                         segment_value = final_data[cat].iloc[i]
-                        if approx_bar_y <= cumulative_height + segment_value:
-                            # This is the segment the label will be on
+                        segment_top = cumulative_height + segment_value
+                        segment_middle = cumulative_height + segment_value / 2
+                        
+                        # Check if line label would be too close to a bar label
+                        # Bar labels are at segment_middle (or at bottom for first segment)
+                        if seg_idx == 0:
+                            bar_label_position = vertical_offset
+                        else:
+                            bar_label_position = segment_middle
+                        
+                        # Convert to line chart scale for comparison
+                        bar_label_position_line_scale = (bar_label_position / bar_ax1_max) * line_ax2_max
+                        
+                        # If within danger zone, need extra offset
+                        danger_zone = y_range * 0.15  # Labels should be at least this far apart
+                        if abs(label_position - bar_label_position_line_scale) < danger_zone:
+                            needs_extra_offset = True
+                            # Increase offset to avoid collision
+                            base_offset = y_range * 0.18
+                            break
+                        
+                        # Determine segment color for contrast
+                        if label_position_bar_scale >= cumulative_height and label_position_bar_scale <= segment_top:
                             segment_color = colors[seg_idx % len(colors)]
                             if is_dark_color(segment_color):
-                                text_color = 'white'
+                                text_color = '#FFFFFF'
                             else:
-                                text_color = 'black'
-                            break
+                                text_color = '#000000'
+                        
                         cumulative_height += segment_value
-                elif place_below and category_column == 'None':
-                    # Single bar - check if it's the light purple
-                    if is_dark_color('#EDD9E4'):
-                        text_color = 'white'
-                    else:
-                        text_color = 'black'
                 
-                # Calculate offset with better spacing to avoid overlaps
-                y_range = chart_ax2.get_ylim()[1] - chart_ax2.get_ylim()[0]
-                offset = y_range * 0.04  # Increased from 0.02 for better spacing
+                elif place_below and category_column == 'None':
+                    # Single bar - check if it's dark
+                    if is_dark_color('#EDD9E4'):
+                        text_color = '#FFFFFF'
+                    else:
+                        text_color = '#000000'
                 
                 # Font weight is 600 (Semi Bold)
                 if place_below:
-                    chart_ax2.text(x, y - offset, str(int(y)), ha='center', va='top', fontsize=dynamic_font_size, 
+                    chart_ax2.text(x, y - base_offset, str(int(y)), ha='center', va='top', fontsize=dynamic_font_size, 
                             fontfamily='Public Sans', color=text_color, fontweight=600)
                 else:
-                    chart_ax2.text(x, y + offset, str(int(y)), ha='center', va='bottom', fontsize=dynamic_font_size, 
+                    chart_ax2.text(x, y + base_offset, str(int(y)), ha='center', va='bottom', fontsize=dynamic_font_size, 
                             fontfamily='Public Sans', color=text_color, fontweight=600)
             
             # Remove spines for second axis
