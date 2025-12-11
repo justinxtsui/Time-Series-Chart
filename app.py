@@ -353,7 +353,6 @@ if 'year_range' not in st.session_state:
 
 # --- SIDEBAR (All Controls) ---
 with st.sidebar:
-    # UPDATED: Use H2 for consistent hierarchy
     st.header("1. Data Source")
     # File Uploader
     uploaded_file = st.file_uploader("Upload your Excel or CSV file", type=['xlsx', 'xls', 'csv'], 
@@ -372,7 +371,6 @@ with st.sidebar:
         
         # --- 2. CHART CONFIGURATION ---
         st.markdown("---")
-        # UPDATED: Use H2 for consistent hierarchy
         st.header("2. Chart Configuration")
         
         # 2A. Time Range Selection
@@ -461,7 +459,6 @@ with st.sidebar:
         
         # --- 3. DOWNLOAD SECTION ---
         st.markdown("---")
-        # UPDATED: Use H2 for consistent hierarchy
         st.header("3. Download Chart")
         
         with st.expander("Download Options", expanded=True):
@@ -488,10 +485,9 @@ with st.sidebar:
 
 if 'df' in locals() and df is not None:
     
-    # UPDATED: Use H2 for consistent hierarchy
-    st.header("Generated Time Series Chart")
-    st.markdown("---")
-
+    # NOTE: Removed the redundant 'Generated Time Series Chart' header
+    # and the surrounding st.container(border=True) component.
+    
     # Retrieve parameters from session state
     year_range = st.session_state['year_range']
     category_column = st.session_state['category_column']
@@ -509,9 +505,8 @@ if 'df' in locals() and df is not None:
     # Generate the chart
     chart_fig = generate_chart(final_data, category_column, show_bars, show_line, chart_title)
 
-    # Use a clean container for the chart display
-    with st.container(border=True):
-        st.pyplot(chart_fig, use_container_width=True)
+    # Display the chart directly in the main area
+    st.pyplot(chart_fig, use_container_width=True)
     
     # --- Export Figure to Buffers (for download buttons) ---
     
