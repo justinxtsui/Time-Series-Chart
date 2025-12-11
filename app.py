@@ -172,7 +172,7 @@ def generate_chart(final_data, category_column, show_bars, show_line, chart_titl
     
     num_bars = len(final_data)
     min_size = 8    # Minimum acceptable font size
-    max_size = 15   # Maximum acceptable font size
+    max_size = 22   # Maximum acceptable font size
     
     if num_bars > 0:
         # Scaling numerator INCREASED to 150 for greater sensitivity.
