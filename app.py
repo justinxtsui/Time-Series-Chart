@@ -168,18 +168,17 @@ def generate_chart(final_data, category_column, show_bars, show_line, chart_titl
     bar_width = 0.8
     x_pos = np.arange(len(final_data))
     
-    # --- DYNAMIC FONT SIZE CALCULATION (MAX CAP AT 25) ---
+    # --- DYNAMIC FONT SIZE CALCULATION (CAP REMOVED) ---
     
     num_bars = len(final_data)
     min_size = 8    # Minimum acceptable font size
-    max_cap = 25    # Maximum acceptable font size (INCREASED)
     
     if num_bars > 0:
-        # Scaling numerator INCREASED to 150 for greater sensitivity and size utilization.
+        # Scaling numerator INCREASED to 150 for greater sensitivity.
         scale_factor = 150 / num_bars 
         
-        # Ensures font size is between 8 (min_size) and 25 (max_cap).
-        DYNAMIC_FONT_SIZE = int(max(min_size, min(max_cap, scale_factor)))
+        # CAP REMOVED: Only checks against the minimum size.
+        DYNAMIC_FONT_SIZE = int(max(min_size, scale_factor))
     else:
         DYNAMIC_FONT_SIZE = 12
     # -------------------------------------------------------------
@@ -247,10 +246,8 @@ def generate_chart(final_data, category_column, show_bars, show_line, chart_titl
                                      fontsize=DYNAMIC_FONT_SIZE, fontweight='bold', color=text_color)
     
     chart_ax1.set_xticks(x_pos)
+    plt.setp(chart_ax1.get_xticklabels(), fontsize=DYNAMIC_FONT_SIZE, fontweight='normal') # Use DYNAMIC_FONT_SIZE for x-ticks
     chart_ax1.set_xticklabels(final_data['time_period'])
-    
-    # Apply DYNAMIC_FONT_SIZE to years
-    plt.setp(chart_ax1.get_xticklabels(), fontsize=DYNAMIC_FONT_SIZE, fontweight='normal')
     
     chart_ax1.set_ylim(0, y_max * 1.1)
     chart_ax1.tick_params(axis='y', left=False, labelleft=False, right=False, labelright=False, length=0)
@@ -361,8 +358,8 @@ def generate_chart(final_data, category_column, show_bars, show_line, chart_titl
         legend_elements.append(Line2D([0], [0], marker='o', color='w', 
                                       markerfacecolor=LINE_COLOR, markersize=10, label='Number of deals'))
         
-    # **FINAL CHANGE:** Legend fontsize changed to 22
-    chart_ax1.legend(handles=legend_elements, loc='upper left', fontsize=22, frameon=False, 
+    # **FINAL CHANGE:** Legend fontsize changed to 30
+    chart_ax1.legend(handles=legend_elements, loc='upper left', fontsize=30, frameon=False, 
                      prop={'weight': 'normal'}, labelspacing=1.0)
     
     # Matplotlib Chart Title: Color is TITLE_COLOR (Black)
