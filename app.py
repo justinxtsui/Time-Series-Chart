@@ -187,15 +187,23 @@ if uploaded_file is not None:
         # Scale font size: base of 8, max of 14
         dynamic_font_size = max(8, min(14, int(bar_width_inches * 10)))
         
+        # Identify category columns if they exist (used for y_max and color logic later)
+        category_cols = []
+        if category_column != 'None':
+            category_cols = [col for col in final_data.columns if col not in ['time_period', 'row_count']]
+
+        # CORRECTED LINE: Calculate y_max for plot limits and vertical offset
+        if category_column == 'None':
+            y_max = final_data[value_column].max()
+        else:
+            # Sum the new category columns to get the total height of the tallest bar
+            y_max = final_data[category_cols].sum(axis=1).max()
+
         # Define the fixed vertical offset for single bar labels
-        y_max = final_data[value_column].max() if category_column == 'None' else final_data[value_column].sum(axis=1).max()
         vertical_offset = y_max * 0.005 # A very small percentage for 'just slightly above the bottom'
         
         # Determine if we have categories or not
         if category_column != 'None':
-            # Get category columns (all columns except time_period and row_count)
-            category_cols = [col for col in final_data.columns if col not in ['time_period', 'row_count']]
-            
             # Define colors for stacked bars (starting with light purple)
             colors = ['#EDD9E4', '#6F2A58', '#A8D5BA', '#FF6B6B', '#4ECDC4', '#FFE66D']
             
@@ -270,7 +278,7 @@ if uploaded_file is not None:
             
             # Get category columns for contrast check (if categories are used)
             if category_column != 'None':
-                category_cols = [col for col in final_data.columns if col not in ['time_period', 'row_count']]
+                colors = ['#EDD9E4', '#6F2A58', '#A8D5BA', '#FF6B6B', '#4ECDC4', '#FFE66D']
                 dark_color_index = colors.index('#6F2A58') if '#6F2A58' in colors else -1 # Check which index corresponds to the dark color
             
             # Add labels to line points
@@ -284,12 +292,10 @@ if uploaded_file is not None:
                     if final_data['row_count'].iloc[i-1] > y:
                         place_below = True
                 
-                # Apply contrast logic for line label: Check if the segment under the line dot is dark.
-                # Find the top segment (largest value) at this x-position
+                # Apply contrast logic for line label: Check if the segment under the line dot is the dark purple one.
                 text_color = 'black'
                 if category_column != 'None' and dark_color_index != -1:
                     # Check if the dark purple segment is the one with the highest value for this X-position
-                    # This is a heuristic to guess which segment the line label is 'on' top of.
                     segment_values = final_data[category_cols].iloc[i]
                     if segment_values.idxmax() == category_cols[dark_color_index]:
                          text_color = '#D3D3D3' # Light Grey
