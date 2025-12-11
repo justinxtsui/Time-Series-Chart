@@ -1,5 +1,3 @@
-# Save the Streamlit app to a file
-streamlit_code = '''
 import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -180,11 +178,3 @@ if uploaded_file is not None:
             file_name="chart.png",
             mime="image/png"
         )
-'''
-
-# Write to file
-with open('streamlit_app.py', 'w') as f:
-    f.write(streamlit_code)
-
-print("Streamlit app saved to 'streamlit_app.py'")
-print("To run the app, use: streamlit run streamlit_app.py")
