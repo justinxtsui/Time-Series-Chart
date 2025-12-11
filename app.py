@@ -7,14 +7,12 @@ from matplotlib.lines import Line2D
 from matplotlib.colors import to_rgb
 
 # --- CONFIGURATION ---
-# Primary Column Names (New Names)
+# Define required column names
 DATE_COLUMN = 'Deal date' 
 VALUE_COLUMN = 'Amount raised (converted to GBP)' 
-
 # Alternative Column Names (Original Names for Backwards Compatibility)
 ALT_DATE_COLUMN = 'Date the participant received the grant'
 ALT_VALUE_COLUMN = 'Amount received (converted to GBP)'
-
 # Define the color palette for categories
 CATEGORY_COLORS = ['#302A7E', '#8884B3', '#D0CCE5', '#5C5799', '#B4B1CE', '#E0DEE9']
 # Define the default single bar color (third color in the palette for a lighter tone)
@@ -165,6 +163,7 @@ def process_data(df, year_range, category_column):
 def generate_chart(final_data, category_column, show_bars, show_line, chart_title):
     """Generates the dual-axis Matplotlib chart."""
     # INCREASED figsize for larger chart display
+    # NOTE: When use_container_width=True is used below, the width here primarily influences the aspect ratio/height.
     chart_fig, chart_ax1 = plt.subplots(figsize=(15, 8)) 
     
     bar_width = 0.8
@@ -609,8 +608,8 @@ if 'df_base' in locals() and df_base is not None:
     col_left, col_chart, col_right = st.columns([0.5, 5, 0.5])
     
     with col_chart:
-        # Display the chart. use_container_width=False respects the Matplotlib figsize for centering.
-        st.pyplot(chart_fig, use_container_width=False) 
+        # UPDATED: use_container_width=True to fill the allocated column space
+        st.pyplot(chart_fig, use_container_width=True) 
     
     # --- Export Figure to Buffers (for download buttons) ---
     
