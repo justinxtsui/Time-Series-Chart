@@ -1,3 +1,126 @@
+import streamlit as st
+import pandas as pd
+import matplotlib.pyplot as plt
+import numpy as np
+from io import BytesIO
+from matplotlib.lines import Line2D
+from matplotlib.colors import to_rgb
+
+# --- CONFIGURATION ---
+# Define required column names
+DATE_COLUMN = 'Date the participant received the grant'
+VALUE_COLUMN = 'Amount received (converted to GBP)'
+# Define the color palette for categories
+CATEGORY_COLORS = ['#302A7E', '#8884B3', '#D0CCE5', '#5C5799', '#B4B1CE', '#E0DEE9']
+# Define the default single bar color (third color in the palette for a lighter tone)
+SINGLE_BAR_COLOR = CATEGORY_COLORS[2] 
+# Define the line chart color
+LINE_COLOR = '#000000' # Black for high contrast
+# Default Title
+DEFAULT_TITLE = 'Grant Funding and Deal Count Over Time'
+
+# Set page config and general styles
+st.set_page_config(page_title="Dynamic Grant Chart Generator", layout="wide")
+plt.rcParams['font.family'] = 'sans-serif'
+plt.rcParams['font.sans-serif'] = ['Arial', 'Public Sans', 'DejaVu Sans']
+
+# --- HELPER FUNCTIONS ---
+
+def format_currency(value):
+    """
+    Format a numeric value as money with £ and units (k, m, b),
+    to 3 significant figures.
+    """
+    value = float(value)
+    if value == 0:
+        return "£0"
+    neg = value < 0
+    x_abs = abs(value)
+    
+    if x_abs >= 1e9:
+        unit = "b"
+        divisor = 1e9
+    elif x_abs >= 1e6:
+        unit = "m"
+        divisor = 1e6
+    elif x_abs >= 1e3:
+        unit = "k"
+        divisor = 1e3
+    else:
+        unit = ""
+        divisor = 1.0
+
+    scaled = x_abs / divisor
+    s = f"{scaled:.3g}"
+    
+    try:
+        if float(s).is_integer():
+            s = str(int(float(s)))
+    except:
+        pass 
+
+    sign = "-" if neg else ""
+    return f"{sign}£{s}{unit}"
+
+def is_dark_color(hex_color):
+    """Check if a hex color is dark. Returns True if dark, False if light."""
+    try:
+        r, g, b = to_rgb(hex_color)
+        luminance = (0.2126 * r + 0.7152 * g + 0.0722 * b)
+        return luminance < 0.5
+    except ValueError:
+        return False
+
+@st.cache_data
+def load_data(uploaded_file):
+    """Loads and preprocesses the uploaded file."""
+    if uploaded_file.name.endswith('.csv'):
+        data = pd.read_csv(uploaded_file)
+    else:
+        # Load the first sheet
+        data = pd.read_excel(uploaded_file, sheet_name=0)
+        
+    if DATE_COLUMN not in data.columns or VALUE_COLUMN not in data.columns:
+        return None, f"File must contain columns: **`{DATE_COLUMN}`** and **`{VALUE_COLUMN}`**."
+
+    try:
+        data[DATE_COLUMN] = pd.to_datetime(data[DATE_COLUMN], errors='coerce')
+        data.dropna(subset=[DATE_COLUMN], inplace=True)
+    except Exception:
+        return None, f"Could not convert **`{DATE_COLUMN}`** to datetime format."
+
+    return data, None
+
+@st.cache_data
+def process_data(df, year_range, category_column):
+    """Filters and aggregates the data for charting."""
+    df = df.copy()
+    start_year, end_year = year_range
+    
+    chart_data = df[df[DATE_COLUMN].dt.year.between(start_year, end_year, inclusive='both')].copy()
+    
+    if chart_data.empty:
+        return None, "No data available for the selected year range."
+    
+    chart_data['time_period'] = chart_data[DATE_COLUMN].dt.year
+    
+    if category_column != 'None':
+        grouped = chart_data.groupby(['time_period', category_column]).agg({
+            VALUE_COLUMN: 'sum'
+        }).reset_index()
+        row_counts = chart_data.groupby('time_period').size().reset_index(name='row_count')
+        pivot_data = grouped.pivot(index='time_period', columns=category_column, values=VALUE_COLUMN).fillna(0)
+        final_data = pivot_data.reset_index().merge(row_counts, on='time_period')
+    else:
+        grouped = chart_data.groupby('time_period').agg({
+            VALUE_COLUMN: 'sum'
+        }).reset_index()
+        row_counts = chart_data.groupby('time_period').size().reset_index(name='row_count')
+        final_data = grouped.merge(row_counts, on='time_period')
+    
+    return final_data, None
+
+
 def generate_chart(final_data, category_column, show_bars, show_line, chart_title):
     """Generates the dual-axis Matplotlib chart."""
     chart_fig, chart_ax1 = plt.subplots(figsize=(12, 6))
@@ -86,7 +209,7 @@ def generate_chart(final_data, category_column, show_bars, show_line, chart_titl
         y_range = chart_ax2.get_ylim()[1] - chart_ax2.get_ylim()[0]
         base_offset = y_range * 0.025 
         
-        # --- NEW PEAK/VALLEY/SLOPE PLACEMENT LOGIC ---
+        # --- ADJUSTED PEAK/VALLEY/SLOPE PLACEMENT LOGIC (Starts here) ---
         num_points = len(line_data)
         
         for i, y in enumerate(line_data):
@@ -146,10 +269,9 @@ def generate_chart(final_data, category_column, show_bars, show_line, chart_titl
                     # Falling then Flat: Treat as falling, place BELOW
                     place_above = False
                 else:
-                    # Completely flat segment (y_prev == y == y_next) or edge case: Default to ABOVE
+                    # Completely flat segment (y_prev == y == y_next) or other edge case: Default to ABOVE
                     place_above = True
                         
-
             # Determine final vertical alignment and position
             if place_above:
                 # Place ABOVE the dot (va='bottom', text sits on top of y_pos)
@@ -188,3 +310,170 @@ def generate_chart(final_data, category_column, show_bars, show_line, chart_titl
     plt.tight_layout()
     
     return chart_fig
+
+# --- STREAMLIT APP LAYOUT ---
+
+st.title("Dynamic Grant Funding Chart Generator")
+st.markdown("---")
+
+# Initialize buffers and session state
+if 'year_range' not in st.session_state:
+    st.session_state['year_range'] = (1900, 2100)
+    st.session_state['category_column'] = 'None'
+    st.session_state['show_bars'] = True
+    st.session_state['show_line'] = True
+    st.session_state['chart_title'] = DEFAULT_TITLE
+    st.session_state['buf_png'] = BytesIO()
+    st.session_state['buf_svg'] = BytesIO()
+
+# Use a sidebar for controls
+with st.sidebar:
+    st.header("1. Upload Data")
+    uploaded_file = st.file_uploader("Upload your Excel or CSV file", type=['xlsx', 'xls', 'csv'])
+
+    df = None
+    if uploaded_file:
+        df, error_msg = load_data(uploaded_file)
+        if df is None:
+            st.error(error_msg)
+            st.stop()
+        
+        st.caption(f"Loaded **{df.shape[0]}** rows for processing.")
+        
+    if df is not None:
+        st.markdown("---")
+        st.header("2. Configure Visualization")
+        
+        # --- Chart Title Input ---
+        custom_title = st.text_input(
+            "Chart Title", 
+            value=st.session_state.get('chart_title', DEFAULT_TITLE),
+            key='chart_title_input'
+        )
+        st.session_state['chart_title'] = custom_title
+        st.markdown("---")
+        
+        # --- Year Selection (Start/End Select Boxes) ---
+        min_year = int(df[DATE_COLUMN].dt.year.min())
+        max_year = int(df[DATE_COLUMN].dt.year.max())
+        all_years = list(range(min_year, max_year + 1))
+        
+        default_start = min_year
+        default_end = max_year
+        
+        current_start, current_end = st.session_state.get('year_range', (default_start, default_end))
+        
+        col_start, col_end = st.columns(2)
+        
+        with col_start:
+            start_year = st.selectbox(
+                "Select Start Year",
+                options=all_years,
+                index=all_years.index(current_start) if current_start in all_years else 0,
+                key='start_year_selector'
+            )
+            
+        with col_end:
+            end_year = st.selectbox(
+                "Select End Year",
+                options=all_years,
+                index=all_years.index(current_end) if current_end in all_years else len(all_years) - 1,
+                key='end_year_selector'
+            )
+            
+        if start_year > end_year:
+            st.error("Start Year must be less than or equal to End Year.")
+            st.stop()
+            
+        year_range = (start_year, end_year)
+        
+        # --- Category Column Selection ---
+        category_columns = ['None'] + sorted([col for col in df.columns if col not in [DATE_COLUMN, VALUE_COLUMN]])
+        category_column = st.selectbox(
+            "Select Category Column (Splits bars)", 
+            category_columns,
+            index=category_columns.index(st.session_state.get('category_column', 'None')),
+            key='category_col_selector'
+        )
+
+        # --- Display Options ---
+        st.subheader("Chart Elements")
+        show_bars = st.checkbox(
+            "Show Total Grant Amount Bars", 
+            value=st.session_state.get('show_bars', True), 
+            key='show_bars_selector'
+        )
+        show_line = st.checkbox(
+            "Show Deal Count Line", 
+            value=st.session_state.get('show_line', True), 
+            key='show_line_selector'
+        )
+        
+        if not show_bars and not show_line:
+            st.warning("Please select at least one element (Bars or Line) to display the chart.")
+            st.stop()
+        
+        # Update session state with new values
+        st.session_state['year_range'] = year_range
+        st.session_state['category_column'] = category_column
+        st.session_state['show_bars'] = show_bars
+        st.session_state['show_line'] = show_line
+        
+        # --- DOWNLOAD SECTION (Sidebar) ---
+        st.markdown("---")
+        st.header("3. Download Chart")
+        
+        st.download_button(
+            label="Download Chart as **PNG**",
+            data=st.session_state.get('buf_png', BytesIO()),
+            file_name=f"{custom_title.replace(' ', '_').lower()}_chart.png",
+            mime="image/png",
+            key="download_png",
+            use_container_width=True
+        )
+        st.download_button(
+            label="Download Chart as **SVG**",
+            data=st.session_state.get('buf_svg', BytesIO()),
+            file_name=f"{custom_title.replace(' ', '_').lower()}_chart.svg",
+            mime="image/svg+xml",
+            key="download_svg",
+            use_container_width=True
+        )
+
+
+# --- MAIN AREA: CHART GENERATION ---
+
+if df is not None:
+    
+    # Retrieve parameters from session state
+    year_range = st.session_state['year_range']
+    category_column = st.session_state['category_column']
+    show_bars = st.session_state['show_bars']
+    show_line = st.session_state['show_line']
+    chart_title = st.session_state['chart_title']
+    
+    # Process the data
+    final_data, process_error = process_data(df, year_range, category_column)
+    
+    if final_data is None:
+        st.error(process_error)
+        st.stop()
+    
+    # Generate the chart, passing the custom title
+    chart_fig = generate_chart(final_data, category_column, show_bars, show_line, chart_title)
+
+    st.pyplot(chart_fig, use_container_width=True)
+    
+    # --- Export Figure to Buffers (to update sidebar download buttons) ---
+    
+    # PNG
+    buf_png = BytesIO()
+    chart_fig.savefig(buf_png, format='png', dpi=300, bbox_inches='tight')
+    buf_png.seek(0)
+    st.session_state['buf_png'] = buf_png
+
+    # SVG
+    buf_svg = BytesIO()
+    chart_fig.savefig(buf_svg, format='svg', bbox_inches='tight')
+    buf_svg.seek(0)
+    st.session_state['buf_svg'] = buf_svg
