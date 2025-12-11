@@ -8,9 +8,7 @@ from matplotlib.colors import to_rgb
 
 # --- CONFIGURATION ---
 # Define required column names
-# UPDATED: DATE_COLUMN changed from 'Date the participant received the grant' to 'Deal date'
 DATE_COLUMN = 'Deal date' 
-# UPDATED: VALUE_COLUMN changed from 'Amount received (converted to GBP)' to 'Amount raised (converted to GBP)'
 VALUE_COLUMN = 'Amount raised (converted to GBP)' 
 # Define the color palette for categories
 CATEGORY_COLORS = ['#302A7E', '#8884B3', '#D0CCE5', '#5C5799', '#B4B1CE', '#E0DEE9']
@@ -86,6 +84,9 @@ def load_data(uploaded_file):
     else:
         # Load the first sheet
         data = pd.read_excel(uploaded_file, sheet_name=0)
+        
+    # FIX: Clean column names by stripping whitespace
+    data.columns = data.columns.str.strip()
         
     if DATE_COLUMN not in data.columns or VALUE_COLUMN not in data.columns:
         return None, f"File must contain columns: **`{DATE_COLUMN}`** and **`{VALUE_COLUMN}`**."
