@@ -176,17 +176,18 @@ if uploaded_file is not None:
         # Create the chart
         chart_fig, chart_ax1 = plt.subplots(figsize=(10, 8))
         
-        bar_width = 0.6
+        # MODIFIED: Increased bar width from 0.6 to 0.8
+        bar_width = 0.8
         x_pos = np.arange(len(final_data))
         
-        # Calculate dynamic font size based on bar width (Aggressive scaling for better visibility)
+        # Calculate dynamic font size based on bar width
         fig_width = chart_fig.get_figwidth()
         ax_bbox = chart_ax1.get_position()
         ax_width_inches = fig_width * ax_bbox.width
         bar_width_inches = (ax_width_inches / len(final_data)) * bar_width
         
-        # Stronger scaling factor (15) for dynamic font size
-        dynamic_font_size = max(9, min(20, int(bar_width_inches * 15))) 
+        # Stronger scaling factor (16) for dynamic font size
+        dynamic_font_size = max(9, min(24, int(bar_width_inches * 16))) 
         
         # Identify category columns if they exist (used for y_max and color logic later)
         category_cols = []
@@ -248,12 +249,9 @@ if uploaded_file is not None:
                     val = final_data[value_column].iloc[i]
                     if val > 0:
                         label_text = format_currency(val)
-                        
-                        # --- MODIFIED ALIGNMENT (CENTER) ---
-                        # Align to the center of the bar (x)
+                        # Alignment is ha='center' 
                         chart_ax1.text(x, baseline_position, label_text, ha='center', va='bottom',
                                 fontsize=dynamic_font_size, fontfamily='Public Sans', fontweight=600, color='black')
-                        # --- END MODIFIED ALIGNMENT ---
         
         # Set up x-axis
         chart_ax1.set_xticks(x_pos)
@@ -269,7 +267,9 @@ if uploaded_file is not None:
         
         chart_ax1.tick_params(axis='y', labelsize=10, left=False, labelleft=False, 
                             right=False, labelright=False, length=0)
-        chart_ax1.tick_params(axis='x', labelsize=12, bottom=False, length=0)
+                            
+        # MODIFIED: Increased pad value to push year labels further down from the bars
+        chart_ax1.tick_params(axis='x', labelsize=12, bottom=False, length=0, pad=10)
         
         # Remove spines
         chart_ax1.spines['top'].set_visible(False)
