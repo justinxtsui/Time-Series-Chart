@@ -162,23 +162,23 @@ def process_data(df, year_range, category_column):
 
 def generate_chart(final_data, category_column, show_bars, show_line, chart_title):
     """Generates the dual-axis Matplotlib chart."""
-    # INCREASED figsize for larger chart display
+    # Matplotlib Figure Size (Increased for resolution)
     chart_fig, chart_ax1 = plt.subplots(figsize=(20, 10)) 
     
     bar_width = 0.8
     x_pos = np.arange(len(final_data))
     
-    # --- DYNAMIC FONT SIZE CALCULATION (MAX CAP AT 15) ---
+    # --- DYNAMIC FONT SIZE CALCULATION (MAX CAP AT 25) ---
     
     num_bars = len(final_data)
     min_size = 8    # Minimum acceptable font size
-    max_cap = 15    # Maximum acceptable font size
+    max_cap = 25    # Maximum acceptable font size (INCREASED)
     
     if num_bars > 0:
-        # Constant numerator for aggressive scaling (100).
-        scale_factor = 100 / num_bars 
+        # Scaling numerator INCREASED to 150 for greater sensitivity and size utilization.
+        scale_factor = 150 / num_bars 
         
-        # Ensures font size is between 8 (min_size) and 15 (max_cap).
+        # Ensures font size is between 8 (min_size) and 25 (max_cap).
         DYNAMIC_FONT_SIZE = int(max(min_size, min(max_cap, scale_factor)))
     else:
         DYNAMIC_FONT_SIZE = 12
@@ -603,12 +603,11 @@ if 'df_base' in locals() and df_base is not None:
     chart_fig = generate_chart(final_data, st.session_state['category_column'], st.session_state['show_bars'], st.session_state['show_line'], st.session_state['chart_title'])
 
     # --- CHART CENTERING IMPROVEMENT ---
-    # Centering and sizing adjustment: Reduced the side margins to [0.05, 7, 0.05] 
-    # to maximize width, and kept use_container_width=True to fill the allocated 7/7.1 width.
+    # Centering and sizing adjustment: Minimized side margins ([0.05, 7, 0.05])
     col_left, col_chart, col_right = st.columns([0.05, 7, 0.05])
     
     with col_chart:
-        # Display the chart. use_container_width=True fills the allocated column space.
+        # Display the chart. use_container_width=True to fill the allocated column space.
         st.pyplot(chart_fig, use_container_width=True) 
     
     # --- Export Figure to Buffers (for download buttons) ---
