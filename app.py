@@ -13,7 +13,7 @@ VALUE_COLUMN = 'Amount received (converted to GBP)'
 # Define the color palette for categories
 CATEGORY_COLORS = ['#302A7E', '#8884B3', '#D0CCE5', '#5C5799', '#B4B1CE', '#E0DEE9']
 # Define the default single bar color (third color in the palette for a lighter tone)
-SINGLE_BAR_COLOR = CATEGORY_COLORS[2] 
+SINGLE_BAR_COLOR = CATEGORY_COLORS[2]
 # Define the line chart color
 LINE_COLOR = '#000000' # Black for high contrast
 # Default Title
@@ -66,6 +66,7 @@ def is_dark_color(hex_color):
     """Check if a hex color is dark. Returns True if dark, False if light."""
     try:
         r, g, b = to_rgb(hex_color)
+        # Calculate luminance
         luminance = (0.2126 * r + 0.7152 * g + 0.0722 * b)
         return luminance < 0.5
     except ValueError:
@@ -128,21 +129,22 @@ def generate_chart(final_data, category_column, show_bars, show_line, chart_titl
     bar_width = 0.8
     x_pos = np.arange(len(final_data))
     
-    # DYNAMIC FONT SIZE: Scales inversely with the number of bars (proportional to bar width)
-    # The larger the bar width (fewer bars), the larger the font size.
+    # --- DYNAMIC FONT SIZE CALCULATION ---
+    # Scales inversely with the number of bars (which is proportional to bar width)
     
     num_bars = len(final_data)
-    # Base size of 16 for a single bar, shrinking down to a minimum of 8.
-    base_size = 16
-    min_size = 8
+    base_size = 16  # Base font size for calculation
+    min_size = 8    # Minimum acceptable font size
     
-    # Scaling factor calculation
     if num_bars > 0:
-        # Scale = max(min_size, base_size / num_bars)
-        # Using a slightly adjusted formula to keep the size proportional and within limits
-        DYNAMIC_FONT_SIZE = max(min_size, min(14, int(base_size * 5 / num_bars)))
+        # Scale factor is based on the inverse of the number of bars.
+        # This links the label size to the decreasing horizontal space of the bars.
+        scale_factor = base_size * 10 / num_bars
+        # Ensure size is between 8 and 14
+        DYNAMIC_FONT_SIZE = int(max(min_size, min(14, scale_factor)))
     else:
         DYNAMIC_FONT_SIZE = 12
+    # -------------------------------------
     
     
     category_cols = []
@@ -184,7 +186,7 @@ def generate_chart(final_data, category_column, show_bars, show_line, chart_titl
                         va = 'center'
                         
                     chart_ax1.text(x, y_pos, label_text, ha='center', va=va,
-                                   fontsize=DYNAMIC_FONT_SIZE, fontweight='bold', color=text_color)
+                                     fontsize=DYNAMIC_FONT_SIZE, fontweight='bold', color=text_color)
             bottom += final_data[cat].values
     else:
         if show_bars:
@@ -203,7 +205,7 @@ def generate_chart(final_data, category_column, show_bars, show_line, chart_titl
                     va = 'bottom'
                         
                     chart_ax1.text(x, y_pos, label_text, ha='center', va=va,
-                                   fontsize=DYNAMIC_FONT_SIZE, fontweight='bold', color=text_color)
+                                     fontsize=DYNAMIC_FONT_SIZE, fontweight='bold', color=text_color)
     
     chart_ax1.set_xticks(x_pos)
     chart_ax1.set_xticklabels(final_data['time_period'])
@@ -297,8 +299,8 @@ def generate_chart(final_data, category_column, show_bars, show_line, chart_titl
                 y_pos = y - base_offset
             
             chart_ax2.text(x, y_pos, str(int(y)), ha='center', va=va, 
-                           fontsize=DYNAMIC_FONT_SIZE, # <-- APPLY DYNAMIC FONT SIZE
-                           color=LINE_COLOR, fontweight='bold')
+                            fontsize=DYNAMIC_FONT_SIZE, # <-- APPLY DYNAMIC FONT SIZE
+                            color=LINE_COLOR, fontweight='bold')
     
     # --- LEGEND & TITLE ---
     legend_elements = []
@@ -380,11 +382,15 @@ with st.sidebar:
         
         col_start, col_end = st.columns(2)
         
+        # Ensure default selection is within the loaded data's year range
+        start_index = all_years.index(current_start) if current_start in all_years else 0
+        end_index = all_years.index(current_end) if current_end in all_years else len(all_years) - 1
+        
         with col_start:
             start_year = st.selectbox(
                 "Select Start Year",
                 options=all_years,
-                index=all_years.index(current_start) if current_start in all_years else 0,
+                index=start_index,
                 key='start_year_selector'
             )
             
@@ -392,7 +398,7 @@ with st.sidebar:
             end_year = st.selectbox(
                 "Select End Year",
                 options=all_years,
-                index=all_years.index(current_end) if current_end in all_years else len(all_years) - 1,
+                index=end_index,
                 key='end_year_selector'
             )
             
@@ -483,6 +489,7 @@ if df is not None:
     
     # PNG
     buf_png = BytesIO()
+    # Explicitly set the figure for savefig
     chart_fig.savefig(buf_png, format='png', dpi=300, bbox_inches='tight')
     buf_png.seek(0)
     st.session_state['buf_png'] = buf_png
