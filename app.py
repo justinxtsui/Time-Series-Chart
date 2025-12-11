@@ -13,7 +13,7 @@ VALUE_COLUMN = 'Amount raised (converted to GBP)'
 # Alternative Column Names (Original Names for Backwards Compatibility)
 ALT_DATE_COLUMN = 'Date the participant received the grant'
 ALT_VALUE_COLUMN = 'Amount received (converted to GBP)'
-# Define the color palette for categories (Used for initial defaults)
+# Define the color palette for categories
 CATEGORY_COLORS = ['#302A7E', '#8884B3', '#D0CCE5', '#5C5799', '#B4B1CE', '#E0DEE9']
 # Define the default single bar color (third color in the palette for a lighter tone)
 SINGLE_BAR_COLOR = '#BBBAF6'
@@ -205,7 +205,9 @@ def generate_chart(final_data, category_column, show_bars, show_line, chart_titl
     # --- AXIS 1 (Bar Chart - Value) ---
     if category_column != 'None':
         bottom = np.zeros(len(final_data))
-        for cat in category_cols: # Use ordered category columns
+        
+        # FIX: Added enumerate to define idx for stacking logic
+        for idx, cat in enumerate(category_cols): 
             color = custom_color_map.get(cat, '#CCCCCC') # Use custom color map
             
             if show_bars:
@@ -357,18 +359,18 @@ def generate_chart(final_data, category_column, show_bars, show_line, chart_titl
         if category_column != 'None':
             for cat in category_cols: # Use ordered category columns for legend
                 color = custom_color_map.get(cat, '#CCCCCC') # Use custom color map
-                # Use large fixed size for marker size
+                # Use dynamic size for marker size
                 legend_elements.append(Line2D([0], [0], marker='o', color='w', 
                                               markerfacecolor=color, markersize=LEGEND_MARKER_SIZE, label=cat)) 
         else:
             # UPDATED LEGEND LABEL
-            # Use large fixed size for marker size
+            # Use dynamic size for marker size
             legend_elements.append(Line2D([0], [0], marker='o', color='w', 
                                           markerfacecolor=SINGLE_BAR_COLOR, markersize=LEGEND_MARKER_SIZE, label='Total amount received')) 
             
     if show_line:
         # UPDATED LEGEND LABEL
-        # Use large fixed size for marker size
+        # Use dynamic size for marker size
         legend_elements.append(Line2D([0], [0], marker='o', color='w', 
                                       markerfacecolor=LINE_COLOR, markersize=LEGEND_MARKER_SIZE, label='Number of deals')) 
         
