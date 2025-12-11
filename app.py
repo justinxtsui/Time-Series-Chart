@@ -13,7 +13,6 @@ VALUE_COLUMN = 'Amount received (converted to GBP)'
 # Define the color palette for categories
 CATEGORY_COLORS = ['#302A7E', '#8884B3', '#D0CCE5', '#5C5799', '#B4B1CE', '#E0DEE9']
 # Define the default single bar color (third color in the palette for a lighter tone)
-# UPDATED: Changed SINGLE_BAR_COLOR to #BBBAF6
 SINGLE_BAR_COLOR = '#BBBAF6'
 # Define the line chart color
 LINE_COLOR = '#000000' # Black for high contrast
@@ -192,7 +191,7 @@ def generate_chart(final_data, category_column, show_bars, show_line, chart_titl
             for i, x in enumerate(x_pos):
                 val = final_data[cat].iloc[i]
                 if val > 0 and show_bars:
-                    label_text = format_currency(val)
+                    label_text = format_currency(val) # Definition is here
                     current_color = color
                     text_color = '#FFFFFF' if is_dark_color(current_color) else '#000000'
                     
@@ -206,7 +205,7 @@ def generate_chart(final_data, category_column, show_bars, show_line, chart_titl
                         y_pos = bottom[i] + val / 2
                         va = 'center'
                         
-                    chart_ax1.text(x, y_pos, label_text, ha='center', va=va,
+                    chart_ax1.text(x, y_pos, label_text, ha='center', va=va, # Access is here
                                      fontsize=DYNAMIC_FONT_SIZE, fontweight='bold', color=text_color)
             bottom += final_data[cat].values
     else:
@@ -218,6 +217,7 @@ def generate_chart(final_data, category_column, show_bars, show_line, chart_titl
             for i, x in enumerate(x_pos):
                 val = final_data[VALUE_COLUMN].iloc[i]
                 if val > 0:
+                    label_text = format_currency(val) # Definition is here
                     text_color = '#FFFFFF' if is_dark_color(SINGLE_BAR_COLOR) else '#000000'
 
                     # Vertical positioning logic (near the base):
@@ -225,7 +225,7 @@ def generate_chart(final_data, category_column, show_bars, show_line, chart_titl
                     y_pos = vertical_offset
                     va = 'bottom'
                         
-                    chart_ax1.text(x, y_pos, label_text, ha='center', va=va,
+                    chart_ax1.text(x, y_pos, label_text, ha='center', va=va, # Access is here
                                      fontsize=DYNAMIC_FONT_SIZE, fontweight='bold', color=text_color)
     
     chart_ax1.set_xticks(x_pos)
