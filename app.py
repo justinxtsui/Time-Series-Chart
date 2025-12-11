@@ -148,10 +148,10 @@ if uploaded_file is not None:
             else:
                 return f'£{value:.2f}'
         
-        # Create the chart
-        chart_fig, chart_ax1 = plt.subplots(figsize=(14, 8))
+        # Create the chart with reduced width to bring bars closer
+        chart_fig, chart_ax1 = plt.subplots(figsize=(10, 8))  # Reduced from 14 to 10
         
-        bar_width = 0.6
+        bar_width = 0.6  # Keep original bar width
         x_pos = np.arange(len(final_data))
         
         # Determine if we have categories or not
@@ -215,7 +215,7 @@ if uploaded_file is not None:
         if show_line:
             chart_ax2 = chart_ax1.twinx()
             chart_ax2.plot(x_pos, final_data['row_count'], color='black', 
-                    marker='o', linewidth=1.5, markersize=5, label='Number of deals')
+                    marker='o', linewidth=1.0, markersize=5, label='Number of deals')
             chart_ax2.tick_params(axis='y', labelsize=10, right=False, labelright=False, 
                            left=False, labelleft=False, length=0)
             chart_ax2.set_ylim(0, final_data['row_count'].max() * 1.5)
@@ -278,14 +278,31 @@ if uploaded_file is not None:
         # Display the chart in Streamlit
         st.pyplot(chart_fig)
         
-        # Add download button for the chart
-        buf = BytesIO()
-        chart_fig.savefig(buf, format='png', dpi=300, bbox_inches='tight')
-        buf.seek(0)
+        # Add download buttons for both PNG and SVG
+        col_download1, col_download2 = st.columns(2)
         
-        st.download_button(
-            label="Download Chart as PNG",
-            data=buf,
-            file_name="chart.png",
-            mime="image/png"
-        )
+        with col_download1:
+            # PNG download
+            buf_png = BytesIO()
+            chart_fig.savefig(buf_png, format='png', dpi=300, bbox_inches='tight')
+            buf_png.seek(0)
+            
+            st.download_button(
+                label="Download Chart as PNG",
+                data=buf_png,
+                file_name="chart.png",
+                mime="image/png"
+            )
+        
+        with col_download2:
+            # SVG download
+            buf_svg = BytesIO()
+            chart_fig.savefig(buf_svg, format='svg', bbox_inches='tight')
+            buf_svg.seek(0)
+            
+            st.download_button(
+                label="Download Chart as SVG",
+                data=buf_svg,
+                file_name="chart.svg",
+                mime="image/svg+xml"
+            )
