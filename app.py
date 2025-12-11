@@ -14,9 +14,9 @@ VALUE_COLUMN = 'Amount raised (converted to GBP)'
 ALT_DATE_COLUMN = 'Date the participant received the grant'
 ALT_VALUE_COLUMN = 'Amount received (converted to GBP)'
 # Define the color palette for categories
-CATEGORY_COLORS = ['#8C8AED', '#BBBAF6', '#D0CCE5', '#5C5799', '#B4B1CE', '#E0DEE9']
+CATEGORY_COLORS = ['#302A7E', '#8884B3', '#D0CCE5', '#5C5799', '#B4B1CE', '#E0DEE9']
 # Define the default single bar color (third color in the palette for a lighter tone)
-SINGLE_BAR_COLOR = CATEGORY_COLORS[2] 
+SINGLE_BAR_COLOR = '#BBBAF6'
 # Define the line chart color
 LINE_COLOR = '#000000' # Black for high contrast
 # Define the chart title color
@@ -91,27 +91,33 @@ def load_data(uploaded_file):
     # 1. Clean column names by stripping whitespace
     data.columns = data.columns.str.strip()
     
+    # Track original value column name for legend
+    original_value_column = None
+    
     # 2. Check and rename date column
     if DATE_COLUMN not in data.columns:
         if ALT_DATE_COLUMN in data.columns:
             data.rename(columns={ALT_DATE_COLUMN: DATE_COLUMN}, inplace=True)
         else:
-            return None, f"File must contain a date column named **`{DATE_COLUMN}`** or **`{ALT_DATE_COLUMN}`**."
+            return None, f"File must contain a date column named **`{DATE_COLUMN}`** or **`{ALT_DATE_COLUMN}`**.", None
 
     # 3. Check and rename value column
     if VALUE_COLUMN not in data.columns:
         if ALT_VALUE_COLUMN in data.columns:
+            original_value_column = 'received'  # Track that it was "received"
             data.rename(columns={ALT_VALUE_COLUMN: VALUE_COLUMN}, inplace=True)
         else:
-            return None, f"File must contain a value column named **`{VALUE_COLUMN}`** or **`{ALT_VALUE_COLUMN}`**."
+            return None, f"File must contain a value column named **`{VALUE_COLUMN}`** or **`{ALT_VALUE_COLUMN}`**.", None
+    else:
+        original_value_column = 'raised'  # Track that it was "raised"
 
     try:
         data[DATE_COLUMN] = pd.to_datetime(data[DATE_COLUMN], errors='coerce')
         data.dropna(subset=[DATE_COLUMN], inplace=True)
     except Exception:
-        return None, f"Could not convert **`{DATE_COLUMN}`** to datetime format."
+        return None, f"Could not convert **`{DATE_COLUMN}`** to datetime format.", None
 
-    return data, None
+    return data, None, original_value_column
 
 @st.cache_data
 def apply_filter(df, filter_config):
@@ -160,7 +166,7 @@ def process_data(df, year_range, category_column):
     return final_data, None
 
 
-def generate_chart(final_data, category_column, show_bars, show_line, chart_title, custom_color_map, custom_order):
+def generate_chart(final_data, category_column, show_bars, show_line, chart_title, original_value_column='raised'):
     """Generates the dual-axis Matplotlib chart."""
     # Matplotlib Figure Size (Increased for resolution)
     chart_fig, chart_ax1 = plt.subplots(figsize=(20, 10)) 
@@ -168,17 +174,18 @@ def generate_chart(final_data, category_column, show_bars, show_line, chart_titl
     bar_width = 0.8
     x_pos = np.arange(len(final_data))
     
-    # --- DYNAMIC FONT SIZE CALCULATION (CAP REMOVED) ---
+    # --- DYNAMIC FONT SIZE CALCULATION ---
     
     num_bars = len(final_data)
     min_size = 8    # Minimum acceptable font size
+    max_size = 22   # Maximum acceptable font size
     
     if num_bars > 0:
         # Scaling numerator INCREASED to 150 for greater sensitivity.
         scale_factor = 150 / num_bars 
         
-        # CAP REMOVED: Only checks against the minimum size.
-        DYNAMIC_FONT_SIZE = int(max(min_size, scale_factor))
+        # Apply both minimum and maximum caps
+        DYNAMIC_FONT_SIZE = int(max(min_size, min(max_size, scale_factor)))
     else:
         DYNAMIC_FONT_SIZE = 12
     # -------------------------------------------------------------
@@ -186,14 +193,8 @@ def generate_chart(final_data, category_column, show_bars, show_line, chart_titl
     
     category_cols = []
     if category_column != 'None':
-        # Use custom order for iteration if provided, otherwise use current columns
         category_cols = [col for col in final_data.columns if col not in ['time_period', 'row_count']]
-        
-        # Ensure custom_order only contains columns present in final_data
-        if custom_order:
-            ordered_cols = [c for c in custom_order if c in final_data.columns]
-            category_cols = ordered_cols
-        
+
     if category_column == 'None':
         y_max = final_data[VALUE_COLUMN].max()
     else:
@@ -205,11 +206,8 @@ def generate_chart(final_data, category_column, show_bars, show_line, chart_titl
     # --- AXIS 1 (Bar Chart - Value) ---
     if category_column != 'None':
         bottom = np.zeros(len(final_data))
-        
-        # FIX: Added enumerate to define idx for stacking logic
-        for idx, cat in enumerate(category_cols): 
-            color = custom_color_map.get(cat, '#CCCCCC') # Use custom color map
-            
+        for idx, cat in enumerate(category_cols):
+            color = CATEGORY_COLORS[idx % len(CATEGORY_COLORS)]
             if show_bars:
                 chart_ax1.bar(x_pos, final_data[cat], bar_width, bottom=bottom, 
                               label=cat, color=color, alpha=1.0)
@@ -351,32 +349,40 @@ def generate_chart(final_data, category_column, show_bars, show_line, chart_titl
     # --- LEGEND & TITLE ---
     legend_elements = []
     
-    # Define large fixed size for markers and font
-    LEGEND_SIZE = 50 # Set fixed size to 50
-    LEGEND_MARKER_SIZE = 50 # Match marker size to font size
+    # Define large font size for legend
+    LEGEND_FONT_SIZE = 18  # Legend font size
+    # Keep marker size fixed at 16 points
+    LEGEND_MARKER_SIZE = 16
+    
+    # Set legend label based on original column type
+    if original_value_column == 'received':
+        bar_legend_label = 'Total amount received'
+    else:  # 'raised'
+        bar_legend_label = 'Amount raised'
     
     if show_bars:
         if category_column != 'None':
-            for cat in category_cols: # Use ordered category columns for legend
-                color = custom_color_map.get(cat, '#CCCCCC') # Use custom color map
-                # Use large fixed size for marker size
+            for idx, cat in enumerate(category_cols):
+                color = CATEGORY_COLORS[idx % len(CATEGORY_COLORS)]
+                # Use proportional marker size
                 legend_elements.append(Line2D([0], [0], marker='o', color='w', 
                                               markerfacecolor=color, markersize=LEGEND_MARKER_SIZE, label=cat)) 
         else:
-            # UPDATED LEGEND LABEL
-            # Use large fixed size for marker size
+            # Use dynamic legend label
+            # Use proportional marker size
             legend_elements.append(Line2D([0], [0], marker='o', color='w', 
-                                          markerfacecolor=SINGLE_BAR_COLOR, markersize=LEGEND_MARKER_SIZE, label='Total amount received')) 
+                                          markerfacecolor=SINGLE_BAR_COLOR, markersize=LEGEND_MARKER_SIZE, label=bar_legend_label)) 
             
     if show_line:
         # UPDATED LEGEND LABEL
-        # Use large fixed size for marker size
+        # Use proportional marker size
         legend_elements.append(Line2D([0], [0], marker='o', color='w', 
                                       markerfacecolor=LINE_COLOR, markersize=LEGEND_MARKER_SIZE, label='Number of deals')) 
         
-    # **FINAL CHANGE:** Legend fontsize changed to 50 (LEGEND_SIZE)
-    chart_ax1.legend(handles=legend_elements, loc='upper left', fontsize=LEGEND_SIZE, frameon=False, 
-                     prop={'weight': 'normal'}, labelspacing=1.0)
+    # Legend with increased font size and proportional markers
+    chart_ax1.legend(handles=legend_elements, loc='upper left', 
+                     prop={'size': LEGEND_FONT_SIZE, 'weight': 'normal'}, 
+                     frameon=False, labelspacing=1.0)
     
     # Matplotlib Chart Title: Color is TITLE_COLOR (Black)
     plt.title(chart_title, fontsize=18, fontweight='bold', pad=20, color=TITLE_COLOR)
@@ -403,8 +409,8 @@ if 'year_range' not in st.session_state:
     st.session_state['filter_column'] = 'None'
     st.session_state['filter_include'] = True
     st.session_state['filter_values'] = []
-    st.session_state['custom_colors'] = {}
-    st.session_state['custom_order'] = []
+    st.session_state['original_value_column'] = 'raised'  # Default
+    st.session_state['stacked_enabled'] = False  # Default
 
 
 # --- SIDEBAR (All Controls) ---
@@ -417,21 +423,32 @@ with st.sidebar:
     df_base = None 
     
     if uploaded_file:
-        df_base, error_msg = load_data(uploaded_file)
+        df_base, error_msg, original_value_column = load_data(uploaded_file)
         if df_base is None:
             st.error(error_msg)
             st.stop()
         
         st.caption(f"Loaded **{df_base.shape[0]}** rows for processing.")
+        # Store original_value_column in session state
+        st.session_state['original_value_column'] = original_value_column
         
     if df_base is not None:
         
-        # --- 2. CHART CONFIGURATION ---
+        # --- 2. CHART TITLE ---
         st.markdown("---")
-        st.header("2. Chart Configuration")
+        st.header("2. Chart Title")
         
-        # 2A. Time Range Selection
-        st.subheader("Time Filters")
+        custom_title = st.text_input(
+            "Chart Title", 
+            value=st.session_state.get('chart_title', DEFAULT_TITLE),
+            key='chart_title_input',
+            help="Customize the title shown above the chart."
+        )
+        st.session_state['chart_title'] = custom_title
+        
+        # --- 3. TIME FILTERS ---
+        st.markdown("---")
+        st.header("3. Time Filters")
         
         # FIX: Using df_base inside the conditional block
         min_year = int(df_base[DATE_COLUMN].dt.year.min())
@@ -469,25 +486,9 @@ with st.sidebar:
             
         year_range = (start_year, end_year)
         
-        # 2B. Category Selection
-        st.subheader("Categorization")
-        
-        # Determine available configuration columns
-        config_columns = [col for col in df_base.columns if col not in [DATE_COLUMN, VALUE_COLUMN]]
-        category_columns = ['None'] + sorted(config_columns)
-        
-        category_column = st.selectbox(
-            "Category Column (Optional Split)", 
-            category_columns,
-            index=category_columns.index(st.session_state.get('category_column', 'None')),
-            key='category_col_selector',
-            help="Select a column to stack and color-code the bars."
-        )
-        st.session_state['category_column'] = category_column
-
-
-        # 2C. Chart Elements and Title
-        st.subheader("Visual Elements")
+        # --- 4. VISUAL ELEMENTS ---
+        st.markdown("---")
+        st.header("4. Visual Elements")
         
         col_elem_1, col_elem_2 = st.columns(2)
         
@@ -508,73 +509,36 @@ with st.sidebar:
             st.warning("Select at least one element.")
             st.stop()
         
-        custom_title = st.text_input(
-            "Chart Title", 
-            value=st.session_state.get('chart_title', DEFAULT_TITLE),
-            key='chart_title_input',
-            help="Customize the title shown above the chart."
-        )
-        st.session_state['chart_title'] = custom_title
-        
-        # Update session state with core config values
+        # Update session state
         st.session_state['year_range'] = year_range
         st.session_state['show_bars'] = show_bars
         st.session_state['show_line'] = show_line
-
-        # --- 3. STACKED BAR OPTIONS (DYNAMIC) ---
         
-        if category_column != 'None':
-            st.markdown("---")
-            st.header(f"3. {category_column} Stack Options")
-            
-            unique_categories = df_base[category_column].astype(str).unique().tolist()
-            default_colors = CATEGORY_COLORS * (len(unique_categories) // len(CATEGORY_COLORS) + 1)
-            
-            # Initialize or update color map in session state
-            if st.session_state['category_column'] != st.session_state.get('last_category_col', None):
-                st.session_state['custom_colors'] = {cat: default_colors[i] for i, cat in enumerate(unique_categories)}
-                st.session_state['custom_order'] = unique_categories # Default order
-                st.session_state['last_category_col'] = st.session_state['category_column']
-            
-            
-            st.subheader("Category Colors")
-            custom_colors_dict = st.session_state['custom_colors']
-            
-            # Show color pickers
-            for i, cat in enumerate(unique_categories):
-                key_name = f'color_picker_{cat}'
-                
-                # Check if the picker exists to prevent re-initialization error
-                if key_name not in st.session_state:
-                     st.session_state[key_name] = custom_colors_dict.get(cat, default_colors[i])
-                     
-                custom_colors_dict[cat] = st.color_picker(
-                    f"Color for '{cat}'",
-                    value=custom_colors_dict.get(cat, default_colors[i]),
-                    key=key_name
-                )
-            st.session_state['custom_colors'] = custom_colors_dict
-            
-            st.subheader("Stack Order (Top to Bottom)")
-            
-            # Multiselect used for drag-and-drop reordering
-            new_order = st.multiselect(
-                'Drag items to change stacking order (top of bar to bottom)',
-                options=unique_categories,
-                default=st.session_state['custom_order'],
-                key='stack_order_multiselect'
-            )
-            st.session_state['custom_order'] = new_order
-        else:
-            # Clear stored data if stacking is disabled
-            st.session_state['custom_colors'] = {}
-            st.session_state['custom_order'] = []
-            st.session_state['last_category_col'] = 'None'
-
-
-        # --- 4. DATA FILTER ---
+        # --- 5. STACKED BAR (OPTIONAL) ---
         st.markdown("---")
-        st.header("4. Data Filter")
+        st.header("5. Stacked bar? (Optional)")
+
+        stacked_enabled = st.checkbox('Enable Stacked Bar', value=st.session_state.get('stacked_enabled', False))
+        st.session_state['stacked_enabled'] = stacked_enabled
+
+        if stacked_enabled:
+            config_columns = [col for col in df_base.columns if col not in [DATE_COLUMN, VALUE_COLUMN]]
+            category_columns = ['None'] + sorted(config_columns)
+            
+            category_column = st.selectbox(
+                "Select Column for Stacking", 
+                category_columns,
+                index=category_columns.index(st.session_state.get('category_column', 'None')),
+                key='category_col_selector',
+                help="Select a column to stack and color-code the bars."
+            )
+            st.session_state['category_column'] = category_column
+        else:
+            st.session_state['category_column'] = 'None'
+
+        # --- 6. DATA FILTER ---
+        st.markdown("---")
+        st.header("6. Data Filter")
 
         filter_enabled = st.checkbox('Enable Data Filtering', value=st.session_state['filter_enabled'])
         st.session_state['filter_enabled'] = filter_enabled
@@ -619,9 +583,9 @@ with st.sidebar:
             else:
                  st.session_state['filter_values'] = []
 
-        # --- 5. DOWNLOAD SECTION ---
+        # --- 7. DOWNLOAD SECTION ---
         st.markdown("---")
-        st.header("5. Download Chart")
+        st.header("7. Download Chart")
         
         with st.expander("Download Options", expanded=True):
             st.caption("Download your generated chart file.")
@@ -671,8 +635,8 @@ if 'df_base' in locals() and df_base is not None:
     # Generate the chart
     chart_fig = generate_chart(final_data, st.session_state['category_column'], 
                                st.session_state['show_bars'], st.session_state['show_line'], 
-                               st.session_state['chart_title'],
-                               st.session_state['custom_colors'], st.session_state['custom_order'])
+                               st.session_state['chart_title'], 
+                               st.session_state.get('original_value_column', 'raised'))
 
     # --- CHART CENTERING IMPROVEMENT ---
     # Centering and sizing adjustment: Minimized side margins ([0.05, 7, 0.05])
@@ -706,9 +670,13 @@ else:
     This generator creates professional time series charts visualizing value (bars) and count (line) over time.
 
     1.  **Upload:** Provide your data file in the sidebar.
-    2.  **Configure:** Use the controls under **'2. Chart Configuration'** to filter the time range, choose a category for stacking, and set the title.
-    3.  **Filter:** Use **'4. Data Filter'** to include or exclude specific data points based on column values.
-    4.  **View & Download:** The generated chart will appear instantly here, ready for high-resolution download in Section 5 of the sidebar.
+    2.  **Configure:** Use the controls in the sidebar sections to:
+        - Set your chart title (Section 2)
+        - Filter the time range (Section 3)
+        - Choose visual elements (Section 4)
+        - Enable stacked bars (Section 5)
+        - Apply data filters (Section 6)
+    3.  **View & Download:** The generated chart will appear instantly here, ready for high-resolution download in Section 7 of the sidebar.
     """)
 
     st.markdown("---")
