@@ -129,18 +129,18 @@ def generate_chart(final_data, category_column, show_bars, show_line, chart_titl
     bar_width = 0.8
     x_pos = np.arange(len(final_data))
     
-    # --- DYNAMIC FONT SIZE CALCULATION (AGGRESSIVE SCALING) ---
+    # --- DYNAMIC FONT SIZE CALCULATION (MAX CAP AT 12) ---
     
     num_bars = len(final_data)
     min_size = 8    # Minimum acceptable font size
+    max_cap = 12    # Maximum acceptable font size (New limit)
     
     if num_bars > 0:
-        # Increased numerator to 100 for a much more aggressive scaling. 
-        # This will make the font size ~100 for 1 bar, closely matching the visual bar width.
+        # Constant numerator for aggressive scaling (100).
         scale_factor = 100 / num_bars 
         
-        # Only check the minimum size. The maximum is uncapped by code.
-        DYNAMIC_FONT_SIZE = int(max(min_size, scale_factor))
+        # Ensures font size is between 8 (min_size) and 12 (max_cap).
+        DYNAMIC_FONT_SIZE = int(max(min_size, min(max_cap, scale_factor)))
     else:
         DYNAMIC_FONT_SIZE = 12
     # -------------------------------------------------------------
