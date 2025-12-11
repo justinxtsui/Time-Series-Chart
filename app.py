@@ -184,8 +184,9 @@ if uploaded_file is not None:
         ax_bbox = chart_ax1.get_position()
         ax_width_inches = fig_width * ax_bbox.width
         bar_width_inches = (ax_width_inches / len(final_data)) * bar_width
-        # Scale font size: base of 8, max of 14
-        dynamic_font_size = max(8, min(14, int(bar_width_inches * 10)))
+        
+        # MODIFIED: Increased maximum font size from 14 to 18 to better utilize bar width
+        dynamic_font_size = max(8, min(18, int(bar_width_inches * 10))) 
         
         # Identify category columns if they exist (used for y_max and color logic later)
         category_cols = []
@@ -250,7 +251,7 @@ if uploaded_file is not None:
                         # Calculate x position for the left edge of the bar
                         x_left = x - bar_width / 2
                         
-                        # MODIFIED: Removed padding (bar_width * 0.05) to push label close to the left edge, maximizing fill.
+                        # Aligned to the left edge (x_left), no padding
                         chart_ax1.text(x_left, baseline_position, label_text, ha='left', va='bottom',
                                 fontsize=dynamic_font_size, fontfamily='Public Sans', fontweight=600, color='black')
         
