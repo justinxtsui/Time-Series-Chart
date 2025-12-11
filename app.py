@@ -15,12 +15,14 @@ CATEGORY_COLORS = ['#302A7E', '#8884B3', '#D0CCE5', '#5C5799', '#B4B1CE', '#E0DE
 # Define the default single bar color (third color in the palette for a lighter tone)
 SINGLE_BAR_COLOR = CATEGORY_COLORS[2]
 # Define the line chart color
-LINE_COLOR = '#000000' # Black for high contrast
+# CHANGED: from '#000000' to Dark purple
+LINE_COLOR = '#4B0082' 
 # Default Title
 DEFAULT_TITLE = 'Grant Funding and Deal Count Over Time'
 
 # Set page config and general styles
-st.set_page_config(page_title="Dynamic Grant Chart Generator", layout="wide")
+# CHANGED: page_title
+st.set_page_config(page_title="Time Series Chart Generator", layout="wide")
 plt.rcParams['font.family'] = 'sans-serif'
 plt.rcParams['font.sans-serif'] = ['Arial', 'Public Sans', 'DejaVu Sans']
 
@@ -133,7 +135,7 @@ def generate_chart(final_data, category_column, show_bars, show_line, chart_titl
     
     num_bars = len(final_data)
     min_size = 8    # Minimum acceptable font size
-    max_cap = 15    # Maximum acceptable font size (Updated to 15)
+    max_cap = 15    # Maximum acceptable font size
     
     if num_bars > 0:
         # Constant numerator for aggressive scaling (100).
@@ -224,6 +226,7 @@ def generate_chart(final_data, category_column, show_bars, show_line, chart_titl
         chart_ax2 = chart_ax1.twinx()
         line_data = final_data['row_count'].values
         
+        # Line color is now Dark Purple
         chart_ax2.plot(x_pos, line_data, color=LINE_COLOR, marker='o', linewidth=1.5, markersize=6, label='Number of Deals')
         
         # Calculate max_count after plotting to get accurate current limits
@@ -315,6 +318,7 @@ def generate_chart(final_data, category_column, show_bars, show_line, chart_titl
                                           markerfacecolor=SINGLE_BAR_COLOR, markersize=10, label='Total Amount'))
             
     if show_line:
+        # Line marker color is Dark Purple
         legend_elements.append(Line2D([0], [0], marker='o', color='w', 
                                       markerfacecolor=LINE_COLOR, markersize=10, label='Number of Deals'))
         
@@ -329,7 +333,8 @@ def generate_chart(final_data, category_column, show_bars, show_line, chart_titl
 
 # --- STREAMLIT APP LAYOUT ---
 
-st.title("Dynamic Grant Funding Chart Generator")
+# CHANGED: st.title
+st.title("Time Series Chart Generator")
 st.markdown("---")
 
 # Initialize buffers and session state
@@ -418,13 +423,15 @@ with st.sidebar:
 
         # --- Display Options ---
         st.subheader("Chart Elements")
+        # CHANGED: Checkbox label
         show_bars = st.checkbox(
-            "Show Total Grant Amount Bars", 
+            "Show bar for deal value", 
             value=st.session_state.get('show_bars', True), 
             key='show_bars_selector'
         )
+        # CHANGED: Checkbox label
         show_line = st.checkbox(
-            "Show Deal Count Line", 
+            "Show line for number of deals", 
             value=st.session_state.get('show_line', True), 
             key='show_line_selector'
         )
