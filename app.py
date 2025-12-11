@@ -58,7 +58,6 @@ if uploaded_file is not None:
         
     with col2:
         # Year Range Selection
-        # Ensure min/max year are integers and handle NaN if necessary (min/max will handle NaN if data is empty, but we already dropped NaT above)
         if pd.isna(min_year) or pd.isna(max_year):
              st.warning("No valid dates found for year selection.")
              year_range = (2000, 2024) # Default fallback
@@ -188,6 +187,10 @@ if uploaded_file is not None:
         # Scale font size: base of 8, max of 14
         dynamic_font_size = max(8, min(14, int(bar_width_inches * 10)))
         
+        # Define the fixed vertical offset for single bar labels
+        y_max = final_data[value_column].max() if category_column == 'None' else final_data[value_column].sum(axis=1).max()
+        vertical_offset = y_max * 0.005 # A very small percentage for 'just slightly above the bottom'
+        
         # Determine if we have categories or not
         if category_column != 'None':
             # Get category columns (all columns except time_period and row_count)
@@ -229,8 +232,8 @@ if uploaded_file is not None:
                             label='Amount raised', color='#EDD9E4', alpha=1.0)
                 
                 # Add labels to bars
-                # The label position should be slightly above the x-axis for visibility
-                baseline_position = final_data[value_column].min() * 0.05 if final_data[value_column].min() > 0 else 0
+                # Baseline position is the fixed offset for 'just slightly above the bottom'
+                baseline_position = vertical_offset 
                 for i, x in enumerate(x_pos):
                     val = final_data[value_column].iloc[i]
                     if val > 0:
@@ -243,7 +246,7 @@ if uploaded_file is not None:
         
         # Set up x-axis
         chart_ax1.set_xticks(x_pos)
-        # Year labels are not bold and use dynamic font size
+        # Year labels use dynamic font size and normal weight
         chart_ax1.set_xticklabels(final_data['time_period'], fontfamily='Public Sans', fontsize=dynamic_font_size, fontweight='normal')
         chart_ax1.tick_params(axis='y', labelsize=10, left=False, labelleft=False, 
                             right=False, labelright=False, length=0)
@@ -265,6 +268,11 @@ if uploaded_file is not None:
                                 left=False, labelleft=False, length=0)
             chart_ax2.set_ylim(0, final_data['row_count'].max() * 1.5)
             
+            # Get category columns for contrast check (if categories are used)
+            if category_column != 'None':
+                category_cols = [col for col in final_data.columns if col not in ['time_period', 'row_count']]
+                dark_color_index = colors.index('#6F2A58') if '#6F2A58' in colors else -1 # Check which index corresponds to the dark color
+            
             # Add labels to line points
             for i, (x, y) in enumerate(zip(x_pos, final_data['row_count'])):
                 # Determine if label should go above or below
@@ -276,8 +284,15 @@ if uploaded_file is not None:
                     if final_data['row_count'].iloc[i-1] > y:
                         place_below = True
                 
-                # Determine text color
+                # Apply contrast logic for line label: Check if the segment under the line dot is dark.
+                # Find the top segment (largest value) at this x-position
                 text_color = 'black'
+                if category_column != 'None' and dark_color_index != -1:
+                    # Check if the dark purple segment is the one with the highest value for this X-position
+                    # This is a heuristic to guess which segment the line label is 'on' top of.
+                    segment_values = final_data[category_cols].iloc[i]
+                    if segment_values.idxmax() == category_cols[dark_color_index]:
+                         text_color = '#D3D3D3' # Light Grey
                 
                 # Calculate offset
                 y_range = chart_ax2.get_ylim()[1] - chart_ax2.get_ylim()[0]
