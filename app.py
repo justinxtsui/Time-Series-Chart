@@ -634,4 +634,13 @@ else:
     This generator creates professional time series charts visualizing value (bars) and count (line) over time.
 
     1.  **Upload:** Provide your data file in the sidebar.
-    2.  **Configure:** Use the controls under **'2. Chart Configuration
+    2.  **Configure:** Use the controls under **'2. Chart Configuration'** to filter the time range, choose a category for stacking, and set the title.
+    3.  **Filter:** Use **'3. Data Filter'** to include or exclude specific data points based on column values.
+    4.  **View & Download:** The generated chart will appear instantly here, ready for high-resolution download in Section 4 of the sidebar.
+    """)
+
+    st.markdown("---")
+    st.subheader("Expected Data Format")
+    st.markdown(f"""
+    Your file must contain, at minimum, a date column (either **`{DATE_COLUMN}`** or **`{ALT_DATE_COLUMN}`**) and a value column (either **`{VALUE_COLUMN}`** or **`{ALT_VALUE_COLUMN}`**).
+    """)
