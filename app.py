@@ -16,24 +16,11 @@ ALT_VALUE_COLUMN = 'Amount received (converted to GBP)'
 # Define the color palette for categories
 CATEGORY_COLORS = ['#302A7E', '#8884B3', '#D0CCE5', '#5C5799', '#B4B1CE', '#E0DEE9']
 
-# Expanded predefined color palette for user selection (purple/lavender family)
+# Predefined color palette for user selection (3 purple/lavender shades)
 PREDEFINED_COLORS = {
     'Dark Purple': '#302A7E',
-    'Medium Purple': '#5C5799',
-    'Light Purple': '#8884B3',
-    'Soft Lavender': '#B4B1CE',
-    'Pale Lavender': '#D0CCE5',
-    'Very Light Lavender': '#E0DEE9',
-    'Deep Indigo': '#4A3B8C',
-    'Royal Purple': '#6B5CA5',
-    'Periwinkle': '#9B8EC7',
-    'Lilac': '#C5B8E0',
-    'Lavender Mist': '#E6E0F2',
-    'Violet': '#8A2BE2',
-    'Amethyst': '#9966CC',
-    'Mauve': '#BFA0D8',
-    'Thistle': '#D8BFD8',
-    'Plum': '#DDA0DD'
+    'Medium Purple': '#8884B3',
+    'Light Lavender': '#D0CCE5'
 }
 # Define the default single bar color (third color in the palette for a lighter tone)
 SINGLE_BAR_COLOR = '#BBBAF6'
@@ -186,7 +173,7 @@ def process_data(df, year_range, category_column):
     return final_data, None
 
 
-def generate_chart(final_data, category_column, show_bars, show_line, chart_title, original_value_column='raised', category_colors=None):
+def generate_chart(final_data, category_column, show_bars, show_line, chart_title, original_value_column='raised', category_colors=None, category_order=None):
     """Generates the dual-axis Matplotlib chart."""
     # Matplotlib Figure Size (Increased for resolution)
     chart_fig, chart_ax1 = plt.subplots(figsize=(20, 10)) 
@@ -214,6 +201,15 @@ def generate_chart(final_data, category_column, show_bars, show_line, chart_titl
     category_cols = []
     if category_column != 'None':
         category_cols = [col for col in final_data.columns if col not in ['time_period', 'row_count']]
+        
+        # Sort categories by user-defined order if provided
+        if category_order:
+            # Create a list of (category, order) tuples
+            category_order_list = [(cat, category_order.get(cat, 999)) for cat in category_cols]
+            # Sort by order value
+            category_order_list.sort(key=lambda x: x[1])
+            # Extract sorted category names
+            category_cols = [cat for cat, _ in category_order_list]
 
     if category_column == 'None':
         y_max = final_data[VALUE_COLUMN].max()
@@ -441,6 +437,7 @@ if 'year_range' not in st.session_state:
     st.session_state['original_value_column'] = 'raised'  # Default
     st.session_state['stacked_enabled'] = False  # Default
     st.session_state['category_colors'] = {}  # Default
+    st.session_state['category_order'] = {}  # Default
 
 
 # --- SIDEBAR (All Controls) ---
@@ -566,14 +563,17 @@ with st.sidebar:
             
             # Color picker for each category
             if category_column != 'None':
-                st.subheader("Category Colors")
+                st.subheader("Category Order & Colors")
+                st.caption("Set the stacking order (1 = bottom) and color for each category")
                 
                 # Get unique categories from the selected column
                 unique_categories = sorted(df_base[category_column].dropna().unique())
                 
-                # Initialize category_colors in session state if not exists
+                # Initialize category_colors and category_order in session state if not exists
                 if 'category_colors' not in st.session_state:
                     st.session_state['category_colors'] = {}
+                if 'category_order' not in st.session_state:
+                    st.session_state['category_order'] = {}
                 
                 # Create color selectors for each category
                 color_names = list(PREDEFINED_COLORS.keys())
@@ -582,6 +582,9 @@ with st.sidebar:
                     # Use default color if not set
                     default_color = CATEGORY_COLORS[idx % len(CATEGORY_COLORS)]
                     current_color = st.session_state['category_colors'].get(category, default_color)
+                    
+                    # Use default order if not set (based on sorted order)
+                    current_order = st.session_state['category_order'].get(category, idx + 1)
                     
                     # Find the current color name, or use first as default
                     current_color_name = None
@@ -593,21 +596,34 @@ with st.sidebar:
                     if current_color_name is None:
                         current_color_name = color_names[idx % len(color_names)]
                     
-                    # Create columns for color preview and selector
-                    col1, col2 = st.columns([1, 3])
+                    # Create columns for order, color selector, and preview
+                    col1, col2, col3 = st.columns([1, 2, 3])
                     
                     with col1:
-                        # Show color preview
+                        # Order number input
+                        order_value = st.number_input(
+                            f"Order",
+                            min_value=1,
+                            max_value=len(unique_categories),
+                            value=current_order,
+                            step=1,
+                            key=f'order_{category}',
+                            label_visibility='collapsed'
+                        )
+                        st.session_state['category_order'][category] = order_value
+                    
+                    with col2:
+                        # Color selector
                         selected_name = st.selectbox(
-                            f"'{category}'",
+                            f"Color",
                             options=color_names,
                             index=color_names.index(current_color_name) if current_color_name in color_names else 0,
                             key=f'color_selector_{category}',
                             label_visibility='collapsed'
                         )
                     
-                    with col2:
-                        # Display color swatch preview
+                    with col3:
+                        # Display color swatch preview with category name
                         selected_hex = PREDEFINED_COLORS[selected_name]
                         st.markdown(
                             f'<div style="background-color: {selected_hex}; padding: 10px; border-radius: 5px; text-align: center; color: {"white" if is_dark_color(selected_hex) else "black"};">'
@@ -619,6 +635,7 @@ with st.sidebar:
         else:
             st.session_state['category_column'] = 'None'
             st.session_state['category_colors'] = {}
+            st.session_state['category_order'] = {}
 
         # --- 6. DATA FILTER ---
         st.markdown("---")
@@ -721,7 +738,8 @@ if 'df_base' in locals() and df_base is not None:
                                st.session_state['show_bars'], st.session_state['show_line'], 
                                st.session_state['chart_title'], 
                                st.session_state.get('original_value_column', 'raised'),
-                               st.session_state.get('category_colors', {}))
+                               st.session_state.get('category_colors', {}),
+                               st.session_state.get('category_order', {}))
 
     # --- CHART CENTERING IMPROVEMENT ---
     # Centering and sizing adjustment: Minimized side margins ([0.05, 7, 0.05])
