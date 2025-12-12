@@ -594,6 +594,11 @@ with st.sidebar:
                         opacity: 0.4 !important;
                         background: #f0f0f0 !important;
                     }
+                    
+                    /* Style color square buttons */
+                    div[data-testid="stButton"] > button {
+                        min-height: 60px;
+                    }
                     </style>
                 """, unsafe_allow_html=True)
                 
@@ -642,40 +647,39 @@ with st.sidebar:
                 for idx, category in enumerate(sorted_categories):
                     current_color = st.session_state['category_colors'].get(category, CATEGORY_COLORS[idx % len(CATEGORY_COLORS)])
                     
-                    # Create two columns: category name and color dropdown
-                    col1, col2 = st.columns([3, 2])
+                    # Create row with category name and 3 color squares
+                    cols = st.columns([2, 1, 1, 1])
                     
-                    with col1:
-                        # Just the category name in plain text
-                        st.markdown(f"**{category}**")
+                    with cols[0]:
+                        st.markdown(f"<div style='padding-top: 15px;'><strong>{category}</strong></div>", unsafe_allow_html=True)
                     
-                    with col2:
-                        # Find current color name
-                        current_color_name = None
-                        for name, hex_code in PREDEFINED_COLORS.items():
-                            if hex_code == current_color:
-                                current_color_name = name
-                                break
-                        
-                        if current_color_name is None:
-                            current_color_name = list(PREDEFINED_COLORS.keys())[0]
-                        
-                        # Create color options with colored squares
-                        color_options = []
-                        for name, hex_code in PREDEFINED_COLORS.items():
-                            # Create HTML with colored square
-                            color_options.append(name)
-                        
-                        # Dropdown with color names
-                        selected_color_name = st.selectbox(
-                            f"Color for {category}",
-                            options=color_options,
-                            index=color_options.index(current_color_name),
-                            key=f'color_select_{category}',
-                            label_visibility='collapsed'
-                        )
-                        
-                        st.session_state['category_colors'][category] = PREDEFINED_COLORS[selected_color_name]
+                    # Three color squares
+                    for col_idx, (color_name, color_hex) in enumerate(PREDEFINED_COLORS.items()):
+                        with cols[col_idx + 1]:
+                            is_selected = (current_color == color_hex)
+                            
+                            # Clickable button
+                            if st.button(
+                                "✓" if is_selected else " ",
+                                key=f'color_{category}_{color_name}',
+                                use_container_width=True
+                            ):
+                                st.session_state['category_colors'][category] = color_hex
+                                st.rerun()
+                            
+                            # Color square visualization
+                            border_width = "4px" if is_selected else "2px"
+                            st.markdown(
+                                f'<div style="background-color: {color_hex}; height: 60px; '
+                                f'border: {border_width} solid {"#000" if is_selected else "#ddd"}; '
+                                f'border-radius: 6px; margin-top: -68px; pointer-events: none; '
+                                f'display: flex; align-items: center; justify-content: center; '
+                                f'color: {"white" if is_dark_color(color_hex) else "black"}; '
+                                f'font-size: 24px; font-weight: bold;">{"✓" if is_selected else ""}</div>',
+                                unsafe_allow_html=True
+                            )
+                    
+                    st.markdown("<div style='margin-bottom: 10px;'></div>", unsafe_allow_html=True)
         else:
             st.session_state['category_column'] = 'None'
             st.session_state['category_colors'] = {}
