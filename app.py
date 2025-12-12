@@ -5,6 +5,7 @@ import numpy as np
 from io import BytesIO
 from matplotlib.lines import Line2D
 from matplotlib.colors import to_rgb
+from streamlit_sortables import sort_items
 
 # --- CONFIGURATION ---
 # Define required column names
@@ -564,7 +565,7 @@ with st.sidebar:
             # Color picker for each category
             if category_column != 'None':
                 st.subheader("Category Order & Colors")
-                st.caption("Set the stacking order (1 = bottom) and color for each category")
+                st.caption("📦 Drag to reorder (bottom to top) | Choose colors for each category")
                 
                 # Get unique categories from the selected column
                 unique_categories = sorted(df_base[category_column].dropna().unique())
@@ -575,18 +576,37 @@ with st.sidebar:
                 if 'category_order' not in st.session_state:
                     st.session_state['category_order'] = {}
                 
-                # Create color selectors for each category
+                # Initialize sorted category list if not exists or if categories changed
+                if 'sorted_categories' not in st.session_state or set(st.session_state.get('sorted_categories', [])) != set(unique_categories):
+                    st.session_state['sorted_categories'] = unique_categories
+                
+                # Drag-and-drop sorting interface
+                st.write("**Stack Order (Drag to Rearrange):**")
+                sorted_categories = sort_items(
+                    st.session_state['sorted_categories'],
+                    direction='vertical',
+                    key='category_sorter'
+                )
+                
+                # Update sorted categories in session state
+                st.session_state['sorted_categories'] = sorted_categories
+                
+                # Update category order based on sorted list (1 = bottom)
+                for idx, category in enumerate(sorted_categories):
+                    st.session_state['category_order'][category] = idx + 1
+                
+                st.markdown("---")
+                
+                # Color selectors for each category (in sorted order)
                 color_names = list(PREDEFINED_COLORS.keys())
                 
-                for idx, category in enumerate(unique_categories):
+                st.write("**Category Colors:**")
+                for idx, category in enumerate(sorted_categories):
                     # Use default color if not set
                     default_color = CATEGORY_COLORS[idx % len(CATEGORY_COLORS)]
                     current_color = st.session_state['category_colors'].get(category, default_color)
                     
-                    # Use default order if not set (based on sorted order)
-                    current_order = st.session_state['category_order'].get(category, idx + 1)
-                    
-                    # Find the current color name, or use first as default
+                    # Find the current color name
                     current_color_name = None
                     for name, hex_code in PREDEFINED_COLORS.items():
                         if hex_code == current_color:
@@ -596,21 +616,12 @@ with st.sidebar:
                     if current_color_name is None:
                         current_color_name = color_names[idx % len(color_names)]
                     
-                    # Create columns for order, color selector, and preview
-                    col1, col2, col3 = st.columns([1, 2, 3])
+                    # Create columns for position indicator, color selector, and preview
+                    col1, col2, col3 = st.columns([0.5, 2, 3])
                     
                     with col1:
-                        # Order number input
-                        order_value = st.number_input(
-                            f"Order",
-                            min_value=1,
-                            max_value=len(unique_categories),
-                            value=current_order,
-                            step=1,
-                            key=f'order_{category}',
-                            label_visibility='collapsed'
-                        )
-                        st.session_state['category_order'][category] = order_value
+                        # Position indicator
+                        st.markdown(f"**{idx + 1}**")
                     
                     with col2:
                         # Color selector
@@ -636,6 +647,8 @@ with st.sidebar:
             st.session_state['category_column'] = 'None'
             st.session_state['category_colors'] = {}
             st.session_state['category_order'] = {}
+            if 'sorted_categories' in st.session_state:
+                del st.session_state['sorted_categories']
 
         # --- 6. DATA FILTER ---
         st.markdown("---")
