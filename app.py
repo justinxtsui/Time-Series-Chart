@@ -423,7 +423,7 @@ st.markdown(f'<h1 style="color:{APP_TITLE_COLOR};">Time Series Chart Generator</
 
 # Styled description box
 st.markdown("""
-    <div style="background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%); 
+    <div style="background: #f5f7fa; 
                 padding: 20px; 
                 border-radius: 10px; 
                 border-left: 5px solid #302A7E; 
@@ -431,14 +431,13 @@ st.markdown("""
         <p style="margin: 0 0 10px 0; font-size: 16px; color: #333;">
             <strong>Turn any fundraising or grant export into a time series chart – JT</strong>
         </p>
-        <p style="margin: 0; font-size: 14px; color: #555;">
-            📊 Link to Beauhurst Advanced search: 
-            <a href="https://platform.beauhurst.com/search/advancedsearch/?avs_json=eyJiYXNlIjoiY29tcGFueSIsImNvbWJpbmUiOiJhbmQiLCJjaGlsZHJlbiI6W119" 
-               target="_blank" 
-               style="color: #302A7E; font-weight: 600; text-decoration: none;">
-               Click here →
-            </a>
-        </p>
+        <a href="https://platform.beauhurst.com/search/advancedsearch/?avs_json=eyJiYXNlIjoiY29tcGFueSIsImNvbWJpbmUiOiJhbmQiLCJjaGlsZHJlbiI6W119" 
+           target="_blank" 
+           style="display: inline-block; background: #fff; padding: 10px 16px; border-radius: 6px; 
+                  border: 1px solid #ddd; color: #302A7E; font-weight: 600; text-decoration: none; 
+                  font-size: 14px; transition: all 0.2s ease;">
+           🔗 Beauhurst Advanced Search
+        </a>
     </div>
 """, unsafe_allow_html=True)
 
