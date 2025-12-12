@@ -595,9 +595,10 @@ with st.sidebar:
                         background: #f0f0f0 !important;
                     }
                     
-                    /* Style color square buttons */
+                    /* Style color square buttons - smaller size */
                     div[data-testid="stButton"] > button {
-                        min-height: 60px;
+                        min-height: 45px;
+                        padding: 0;
                     }
                     </style>
                 """, unsafe_allow_html=True)
@@ -648,10 +649,11 @@ with st.sidebar:
                     current_color = st.session_state['category_colors'].get(category, CATEGORY_COLORS[idx % len(CATEGORY_COLORS)])
                     
                     # Create row with category name and 3 color squares
-                    cols = st.columns([2, 1, 1, 1])
+                    cols = st.columns([3, 1, 1, 1])
                     
                     with cols[0]:
-                        st.markdown(f"<div style='padding-top: 15px;'><strong>{category}</strong></div>", unsafe_allow_html=True)
+                        # Plain category name, no decorations
+                        st.markdown(f"<div style='padding-top: 8px; font-size: 16px;'><strong>{category}</strong></div>", unsafe_allow_html=True)
                     
                     # Three color squares
                     for col_idx, (color_name, color_hex) in enumerate(PREDEFINED_COLORS.items()):
@@ -667,19 +669,19 @@ with st.sidebar:
                                 st.session_state['category_colors'][category] = color_hex
                                 st.rerun()
                             
-                            # Color square visualization
-                            border_width = "4px" if is_selected else "2px"
+                            # Smaller color square visualization
+                            border_width = "3px" if is_selected else "2px"
                             st.markdown(
-                                f'<div style="background-color: {color_hex}; height: 60px; '
+                                f'<div style="background-color: {color_hex}; height: 45px; '
                                 f'border: {border_width} solid {"#000" if is_selected else "#ddd"}; '
-                                f'border-radius: 6px; margin-top: -68px; pointer-events: none; '
+                                f'border-radius: 4px; margin-top: -53px; pointer-events: none; '
                                 f'display: flex; align-items: center; justify-content: center; '
                                 f'color: {"white" if is_dark_color(color_hex) else "black"}; '
-                                f'font-size: 24px; font-weight: bold;">{"✓" if is_selected else ""}</div>',
+                                f'font-size: 20px; font-weight: bold;">{"✓" if is_selected else ""}</div>',
                                 unsafe_allow_html=True
                             )
                     
-                    st.markdown("<div style='margin-bottom: 10px;'></div>", unsafe_allow_html=True)
+                    st.markdown("<div style='margin-bottom: 5px;'></div>", unsafe_allow_html=True)
         else:
             st.session_state['category_column'] = 'None'
             st.session_state['category_colors'] = {}
