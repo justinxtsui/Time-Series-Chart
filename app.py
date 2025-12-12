@@ -39,7 +39,7 @@ st.set_page_config(page_title="Time Series Chart Generator", layout="wide", init
 plt.rcParams['font.family'] = 'sans-serif'
 plt.rcParams['font.sans-serif'] = ['Arial', 'Public Sans', 'DejaVu Sans']
 
-# Clean flat modern design - no gradients or shadows
+# Bold minimalist design with creative color usage
 st.markdown("""
     <style>
     /* Modern system fonts */
@@ -49,47 +49,50 @@ st.markdown("""
     
     /* Main content background */
     .main {
-        background-color: #F0F2F5;
+        background-color: #F7F7F7;
     }
     
-    /* Sidebar - clean white */
+    /* Sidebar with color accent */
     [data-testid="stSidebar"] {
         background-color: #FFFFFF;
-        border-right: 1px solid #E4E6EB;
+        border-right: 3px solid #302A7E;
     }
     
     [data-testid="stSidebar"] h2 {
-        color: #1C1E21;
-        font-weight: 600;
-        font-size: 17px;
-        margin-bottom: 16px;
-        padding-bottom: 12px;
-        border-bottom: 2px solid #302A7E;
+        color: #FFFFFF;
+        background-color: #302A7E;
+        font-weight: 700;
+        font-size: 16px;
+        margin: -1rem -1rem 1.5rem -1rem;
+        padding: 16px 1rem;
+        letter-spacing: 0.5px;
     }
     
     /* Headers */
     h1 {
-        font-weight: 700;
-        color: #1C1E21;
+        font-weight: 800;
+        color: #000000;
+        letter-spacing: -1px;
     }
     
     h2, h3 {
-        font-weight: 600;
-        color: #1C1E21;
+        font-weight: 700;
+        color: #000000;
     }
     
-    /* Buttons - flat design */
+    /* Buttons - flat bold design */
     .stButton > button {
-        border-radius: 8px;
-        font-weight: 600;
+        border-radius: 6px;
+        font-weight: 700;
         font-size: 15px;
-        padding: 10px 16px;
-        transition: all 0.2s ease;
+        padding: 12px 24px;
         border: none;
+        transition: all 0.2s ease;
+        letter-spacing: 0.3px;
     }
     
     .stButton > button:hover {
-        opacity: 0.9;
+        transform: scale(0.98);
     }
     
     /* Primary buttons */
@@ -98,70 +101,74 @@ st.markdown("""
         color: white;
     }
     
-    /* Download buttons */
+    /* Download buttons with bold color */
     .stDownloadButton > button {
         background: #302A7E;
         color: white;
-        border-radius: 8px;
-        font-weight: 600;
-        padding: 10px 16px;
+        border-radius: 6px;
+        font-weight: 700;
+        padding: 12px 24px;
+        letter-spacing: 0.3px;
     }
     
     .stDownloadButton > button:hover {
         background: #251F5E;
+        transform: scale(0.98);
     }
     
-    /* File uploader */
+    /* File uploader with bold border */
     [data-testid="stFileUploader"] {
         background-color: #FFFFFF;
-        border-radius: 8px;
-        padding: 20px;
-        border: 2px dashed #CCD0D5;
+        border-radius: 12px;
+        padding: 24px;
+        border: 3px dashed #302A7E;
     }
     
-    /* Input fields */
+    /* Input fields with bold accents */
     .stTextInput input, .stSelectbox select {
-        border-radius: 8px;
-        border: 1.5px solid #CCD0D5;
+        border-radius: 6px;
+        border: 2px solid #E0E0E0;
         padding: 10px 12px;
         font-size: 15px;
         background: #FFFFFF;
+        font-weight: 500;
     }
     
     .stTextInput input:focus, .stSelectbox select:focus {
         border-color: #302A7E;
-        outline: 2px solid rgba(48, 42, 126, 0.1);
+        outline: 3px solid rgba(48, 42, 126, 0.15);
     }
     
     /* Checkbox styling */
     .stCheckbox {
         font-size: 15px;
+        font-weight: 500;
     }
     
     /* Spacing */
     .block-container {
-        padding-top: 3rem;
+        padding-top: 2rem;
         padding-bottom: 3rem;
         max-width: 1200px;
     }
     
-    /* Code blocks */
+    /* Code blocks with bold styling */
     code {
-        background-color: #F0F2F5;
-        padding: 4px 8px;
+        background-color: #302A7E;
+        color: #FFFFFF;
+        padding: 4px 10px;
         border-radius: 4px;
         font-size: 0.9em;
-        color: #302A7E;
         font-family: 'SF Mono', Monaco, monospace;
-        font-weight: 500;
-        border: 1px solid #E4E6EB;
+        font-weight: 600;
     }
     
-    /* Divider lines */
+    /* Bold divider lines */
     hr {
         border: none;
-        border-top: 1px solid #E4E6EB;
-        margin: 24px 0;
+        border-top: 2px solid #302A7E;
+        margin: 32px 0;
+        opacity: 0.3;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -548,51 +555,53 @@ def generate_chart(final_data, category_column, show_bars, show_line, chart_titl
 # 1. MAIN APPLICATION TITLE
 st.markdown("""
     <div style="background: #FFFFFF; 
-                padding: 40px 0; 
+                padding: 0; 
                 margin: -3rem -3rem 2rem -3rem;
-                border-bottom: 1px solid #E4E6EB;">
-        <div style="max-width: 1200px; margin: 0 auto; padding: 0 3rem;">
-            <div style="display: inline-block; 
-                        padding: 6px 16px; 
-                        background: #302A7E; 
-                        border-radius: 20px; 
-                        margin-bottom: 16px;">
-                <span style="color: white; 
-                             font-size: 13px; 
-                             font-weight: 600; 
-                             letter-spacing: 0.5px;
+                border-bottom: 4px solid #302A7E;">
+        <div style="background: #302A7E; 
+                    padding: 12px 0;">
+            <div style="max-width: 1200px; margin: 0 auto; padding: 0 3rem;">
+                <span style="color: #FFFFFF; 
+                             font-size: 12px; 
+                             font-weight: 700; 
+                             letter-spacing: 2px;
                              text-transform: uppercase;">
-                    Data Visualization
+                    Data Visualization Tool
                 </span>
             </div>
-            <h1 style="color: #1C1E21; 
-                       margin: 0 0 12px 0; 
-                       font-size: 32px; 
-                       font-weight: 700;
-                       letter-spacing: -0.8px;">
+        </div>
+        <div style="max-width: 1200px; margin: 0 auto; padding: 40px 3rem;">
+            <h1 style="color: #000000; 
+                       margin: 0 0 16px 0; 
+                       font-size: 36px; 
+                       font-weight: 800;
+                       letter-spacing: -1.5px;">
                 Time Series Chart Generator
             </h1>
-            <p style="color: #65676B; 
-                      margin: 0 0 20px 0; 
-                      font-size: 16px;
-                      line-height: 24px;
-                      max-width: 600px;">
+            <p style="color: #666666; 
+                      margin: 0 0 24px 0; 
+                      font-size: 17px;
+                      line-height: 28px;
+                      font-weight: 400;
+                      max-width: 650px;">
                 Turn any fundraising or grant export into a time series chart – JT
             </p>
             <a href="https://platform.beauhurst.com/search/advancedsearch/?avs_json=eyJiYXNlIjoiY29tcGFueSIsImNvbWJpbmUiOiJhbmQiLCJjaGlsZHJlbiI6W119" 
                target="_blank" 
-               style="color: #302A7E; 
+               style="color: #FFFFFF;
+                      background: #302A7E;
                       text-decoration: none; 
-                      font-size: 15px; 
-                      font-weight: 600;
+                      font-size: 14px; 
+                      font-weight: 700;
                       display: inline-flex;
                       align-items: center;
-                      gap: 6px;
-                      padding: 8px 16px;
-                      background: #F0F2F5;
-                      border-radius: 6px;">
-               <span>Beauhurst Advanced Search</span>
-               <span style="font-size: 16px;">→</span>
+                      gap: 8px;
+                      padding: 12px 24px;
+                      border-radius: 4px;
+                      letter-spacing: 0.5px;
+                      text-transform: uppercase;">
+               <span>Beauhurst Search</span>
+               <span style="font-size: 18px;">→</span>
             </a>
         </div>
     </div>
@@ -981,39 +990,42 @@ if 'df_base' in locals() and df_base is not None:
     st.session_state['buf_svg'] = buf_svg
 
 else:
-    # Message for initial load
+    # Message for initial load - elegant alert
     st.markdown("""
-        <div style="background: #E7F3FF; 
-                    padding: 20px 24px; 
-                    border-radius: 8px;
-                    border-left: 4px solid #302A7E;
-                    margin: 24px 0;">
+        <div style="background: #E8F4FD; 
+                    padding: 20px 28px; 
+                    border-radius: 0;
+                    border-left: 4px solid #1E88E5;
+                    margin: 32px 0;">
             <p style="margin: 0; 
                       font-size: 15px; 
-                      color: #1C1E21;
-                      line-height: 22px;">
-                <strong style="color: #302A7E;">Get Started:</strong> Upload your data file using the controls in the sidebar (Section 1) to begin chart configuration.
+                      color: #000000;
+                      line-height: 24px;
+                      font-weight: 500;">
+                <strong style="color: #1E88E5;">Get Started:</strong> Upload your data file using the controls in the sidebar (Section 1) to begin chart configuration.
             </p>
         </div>
     """, unsafe_allow_html=True)
     
-    # Expected Data Format Card
+    # Expected Data Format Card - elegant design
     st.markdown("""
         <div style="background: #FFFFFF; 
-                    padding: 28px; 
-                    border-radius: 8px; 
-                    margin: 24px 0;
-                    border: 1px solid #E4E6EB;">
-            <h3 style="color: #1C1E21; 
-                       margin: 0 0 16px 0; 
-                       font-size: 22px; 
-                       font-weight: 600;">
+                    padding: 32px; 
+                    border-radius: 0; 
+                    margin: 32px 0;
+                    border-left: 6px solid #302A7E;">
+            <h3 style="color: #000000; 
+                       margin: 0 0 20px 0; 
+                       font-size: 24px; 
+                       font-weight: 700;
+                       letter-spacing: -0.5px;">
                 Expected Data Format
             </h3>
-            <p style="color: #65676B; 
-                      font-size: 15px; 
-                      line-height: 1.6; 
-                      margin: 0;">
+            <p style="color: #666666; 
+                      font-size: 16px; 
+                      line-height: 1.7; 
+                      margin: 0;
+                      font-weight: 400;">
                 Your file must contain, at minimum, a date column (either <code>Deal date</code> or <code>Date the participant received the grant</code>) and a value column (either <code>Amount raised (converted to GBP)</code> or <code>Amount received (converted to GBP)</code>).
             </p>
         </div>
@@ -1022,71 +1034,78 @@ else:
     # How It Works Card - containing all three steps
     st.markdown("""
         <div style="background: #FFFFFF; 
-                    padding: 28px; 
-                    border-radius: 8px; 
-                    margin: 24px 0;
-                    border: 1px solid #E4E6EB;">
-            <h3 style="color: #1C1E21; 
-                       margin: 0 0 12px 0; 
-                       font-size: 22px; 
-                       font-weight: 600;">
+                    padding: 32px; 
+                    border-radius: 0; 
+                    margin: 32px 0 16px 0;
+                    border-left: 6px solid #302A7E;">
+            <h3 style="color: #000000; 
+                       margin: 0 0 16px 0; 
+                       font-size: 24px; 
+                       font-weight: 700;
+                       letter-spacing: -0.5px;">
                 How It Works
             </h3>
-            <p style="color: #65676B; 
-                      font-size: 15px; 
-                      line-height: 1.6; 
-                      margin: 0 0 28px 0;">
+            <p style="color: #666666; 
+                      font-size: 16px; 
+                      line-height: 1.7; 
+                      margin: 0 0 40px 0;
+                      font-weight: 400;">
                 This generator creates professional time series charts visualizing value (bars) and count (line) over time.
             </p>
+        </div>
     """, unsafe_allow_html=True)
     
     # Step 1 inside the card
-    col1_1, col1_2 = st.columns([1, 10])
+    col1_1, col1_2 = st.columns([1, 11])
     with col1_1:
         st.markdown("""
-            <div style="width: 40px; 
-                        height: 40px; 
+            <div style="width: 48px; 
+                        height: 48px; 
                         background: #302A7E; 
                         color: white; 
-                        border-radius: 50%; 
+                        border-radius: 0; 
                         display: flex; 
                         align-items: center; 
                         justify-content: center; 
-                        font-weight: 700;
-                        font-size: 16px;
-                        text-align: center;
-                        line-height: 40px;">
+                        font-weight: 800;
+                        font-size: 20px;">
                 1
             </div>
         """, unsafe_allow_html=True)
     with col1_2:
-        st.markdown("**Upload**")
-        st.markdown("Provide your data file in the sidebar.")
+        st.markdown("""
+            <div style="padding-top: 4px;">
+                <h4 style="margin: 0 0 8px 0; font-size: 18px; font-weight: 700; color: #000000;">Upload</h4>
+                <p style="margin: 0; font-size: 15px; color: #666666; line-height: 1.6;">Provide your data file in the sidebar.</p>
+            </div>
+        """, unsafe_allow_html=True)
     
-    st.markdown("<div style='height: 20px;'></div>", unsafe_allow_html=True)
+    st.markdown("<div style='height: 32px;'></div>", unsafe_allow_html=True)
     
     # Step 2 inside the card
-    col2_1, col2_2 = st.columns([1, 10])
+    col2_1, col2_2 = st.columns([1, 11])
     with col2_1:
         st.markdown("""
-            <div style="width: 40px; 
-                        height: 40px; 
+            <div style="width: 48px; 
+                        height: 48px; 
                         background: #302A7E; 
                         color: white; 
-                        border-radius: 50%; 
+                        border-radius: 0; 
                         display: flex; 
                         align-items: center; 
                         justify-content: center; 
-                        font-weight: 700;
-                        font-size: 16px;
-                        text-align: center;
-                        line-height: 40px;">
+                        font-weight: 800;
+                        font-size: 20px;">
                 2
             </div>
         """, unsafe_allow_html=True)
     with col2_2:
-        st.markdown("**Configure**")
-        st.markdown("Use the controls in the sidebar sections to customize your chart:")
+        st.markdown("""
+            <div style="padding-top: 4px;">
+                <h4 style="margin: 0 0 8px 0; font-size: 18px; font-weight: 700; color: #000000;">Configure</h4>
+                <p style="margin: 0 0 12px 0; font-size: 15px; color: #666666; line-height: 1.6;">Use the controls in the sidebar sections to customize your chart:</p>
+            </div>
+        """, unsafe_allow_html=True)
         st.markdown("""
         - Set your chart title
         - Filter the time range
@@ -1095,30 +1114,32 @@ else:
         - Apply data filters
         """)
     
-    st.markdown("<div style='height: 20px;'></div>", unsafe_allow_html=True)
+    st.markdown("<div style='height: 32px;'></div>", unsafe_allow_html=True)
     
     # Step 3 inside the card
-    col3_1, col3_2 = st.columns([1, 10])
+    col3_1, col3_2 = st.columns([1, 11])
     with col3_1:
         st.markdown("""
-            <div style="width: 40px; 
-                        height: 40px; 
+            <div style="width: 48px; 
+                        height: 48px; 
                         background: #302A7E; 
                         color: white; 
-                        border-radius: 50%; 
+                        border-radius: 0; 
                         display: flex; 
                         align-items: center; 
                         justify-content: center; 
-                        font-weight: 700;
-                        font-size: 16px;
-                        text-align: center;
-                        line-height: 40px;">
+                        font-weight: 800;
+                        font-size: 20px;">
                 3
             </div>
         """, unsafe_allow_html=True)
     with col3_2:
-        st.markdown("**View & Download**")
-        st.markdown("The generated chart will appear instantly here, ready for high-resolution download.")
+        st.markdown("""
+            <div style="padding-top: 4px;">
+                <h4 style="margin: 0 0 8px 0; font-size: 18px; font-weight: 700; color: #000000;">View & Download</h4>
+                <p style="margin: 0; font-size: 15px; color: #666666; line-height: 1.6;">The generated chart will appear instantly here, ready for high-resolution download.</p>
+            </div>
+        """, unsafe_allow_html=True)
     
     # Close the How It Works card
-    st.markdown("</div>", unsafe_allow_html=True)
+    st.markdown("<div style='padding: 16px;'></div></div>", unsafe_allow_html=True)
