@@ -639,37 +639,37 @@ with st.sidebar:
                 # Color selection section
                 st.markdown("**Assign Colors**")
                 
-                # Map hex codes to display with colored emoji boxes
-                color_display_map = {
-                    '#302A7E': '🟪 #302A7E',
-                    '#8884B3': '🟣 #8884B3', 
-                    '#D0CCE5': '⬜ #D0CCE5'
-                }
-                
                 for idx, category in enumerate(sorted_categories):
                     current_color = st.session_state['category_colors'].get(category, CATEGORY_COLORS[idx % len(CATEGORY_COLORS)])
                     
-                    # Create row with tighter spacing
-                    col1, col2 = st.columns([1, 2])
+                    # Create row with category, dropdown, and color box
+                    col1, col2, col3 = st.columns([1, 1.5, 0.5])
                     
                     with col1:
                         # Category name
                         st.markdown(f"<div style='padding-top: 8px; font-size: 16px;'><strong>{category}</strong></div>", unsafe_allow_html=True)
                     
                     with col2:
-                        # Dropdown with colored emoji boxes and hex codes
+                        # Dropdown with just hex codes (no emojis)
                         color_options = list(PREDEFINED_COLORS.values())
                         
                         selected_hex = st.selectbox(
                             f"Color for {category}",
                             options=color_options,
-                            format_func=lambda x: color_display_map.get(x, x),
                             index=color_options.index(current_color) if current_color in color_options else 0,
                             key=f'color_select_{category}',
                             label_visibility='collapsed'
                         )
                         
                         st.session_state['category_colors'][category] = selected_hex
+                    
+                    with col3:
+                        # Colored square box showing selected color
+                        st.markdown(
+                            f'<div style="background-color: {selected_hex}; height: 38px; width: 100%; '
+                            f'border-radius: 4px; border: 2px solid #ddd; margin-top: 0px;"></div>',
+                            unsafe_allow_html=True
+                        )
         else:
             st.session_state['category_column'] = 'None'
             st.session_state['category_colors'] = {}
