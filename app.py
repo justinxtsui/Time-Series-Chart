@@ -562,10 +562,10 @@ with st.sidebar:
             )
             st.session_state['category_column'] = category_column
             
-            # Color picker for each category
+            # Color picker for each category  
             if category_column != 'None':
                 st.subheader("Category Order & Colors")
-                st.caption("📦 Drag categories to reorder (top = top of chart, bottom = bottom of chart)")
+                st.caption("📦 Drag blocks to reorder (top = top of chart) | Select colors on the right")
                 
                 # Get unique categories from the selected column
                 unique_categories = sorted(df_base[category_column].dropna().unique())
@@ -582,83 +582,67 @@ with st.sidebar:
                 
                 color_names = list(PREDEFINED_COLORS.keys())
                 
-                # Create draggable items with color selectors
-                draggable_items = []
-                for category in st.session_state['sorted_categories']:
-                    # Use default color if not set
-                    idx = st.session_state['sorted_categories'].index(category)
-                    default_color = CATEGORY_COLORS[idx % len(CATEGORY_COLORS)]
-                    current_color = st.session_state['category_colors'].get(category, default_color)
-                    
-                    # Find the current color name
-                    current_color_name = None
-                    for name, hex_code in PREDEFINED_COLORS.items():
-                        if hex_code == current_color:
-                            current_color_name = name
-                            break
-                    
-                    if current_color_name is None:
-                        current_color_name = color_names[idx % len(color_names)]
-                    
-                    draggable_items.append(category)
+                # Single integrated interface
+                col_drag, col_color = st.columns([1.5, 2.5])
                 
-                # Drag-and-drop sorting interface with integrated color selection
-                sorted_categories = sort_items(
-                    draggable_items,
-                    direction='vertical',
-                    key='category_sorter'
-                )
+                with col_drag:
+                    st.markdown("**🔃 Drag**")
+                    # Drag-and-drop sorting interface
+                    sorted_categories = sort_items(
+                        st.session_state['sorted_categories'],
+                        direction='vertical',
+                        key='category_sorter',
+                        multi_containers=False
+                    )
+                    
+                    # Update sorted categories in session state
+                    st.session_state['sorted_categories'] = sorted_categories
+                    
+                    # Update category order based on sorted list (higher number = higher in stack)
+                    num_categories = len(sorted_categories)
+                    for idx, category in enumerate(sorted_categories):
+                        st.session_state['category_order'][category] = num_categories - idx
                 
-                # Update sorted categories in session state
-                st.session_state['sorted_categories'] = sorted_categories
-                
-                # Update category order based on sorted list (higher number = higher in stack)
-                # Reverse the order so first item (top) gets highest number
-                num_categories = len(sorted_categories)
-                for idx, category in enumerate(sorted_categories):
-                    st.session_state['category_order'][category] = num_categories - idx
-                
-                st.markdown("---")
-                st.write("**Colors for each category:**")
-                
-                # Color selectors for each category (in sorted order from drag-and-drop)
-                for idx, category in enumerate(sorted_categories):
-                    # Use default color if not set
-                    default_color = CATEGORY_COLORS[idx % len(CATEGORY_COLORS)]
-                    current_color = st.session_state['category_colors'].get(category, default_color)
-                    
-                    # Find the current color name
-                    current_color_name = None
-                    for name, hex_code in PREDEFINED_COLORS.items():
-                        if hex_code == current_color:
-                            current_color_name = name
-                            break
-                    
-                    if current_color_name is None:
-                        current_color_name = color_names[idx % len(color_names)]
-                    
-                    # Create columns for color selector and preview
-                    col1, col2 = st.columns([2, 3])
-                    
-                    with col1:
-                        # Color selector
-                        selected_name = st.selectbox(
-                            f"{category}",
-                            options=color_names,
-                            index=color_names.index(current_color_name) if current_color_name in color_names else 0,
-                            key=f'color_selector_{category}'
-                        )
-                    
-                    with col2:
-                        # Display color swatch preview with category name
-                        selected_hex = PREDEFINED_COLORS[selected_name]
-                        st.markdown(
-                            f'<div style="background-color: {selected_hex}; padding: 12px; border-radius: 5px; text-align: center; color: {"white" if is_dark_color(selected_hex) else "black"}; margin-top: 5px;">'
-                            f'<b>{category}</b></div>',
-                            unsafe_allow_html=True
-                        )
-                    
-                    st.session_state['category_colors'][category] = PREDEFINED_COLORS[selected_name]
+                with col_color:
+                    st.markdown("**🎨 Color**")
+                    # Color selectors aligned with drag items
+                    for idx, category in enumerate(sorted_categories):
+                        # Use default color if not set
+                        default_color = CATEGORY_COLORS[idx % len(CATEGORY_COLORS)]
+                        current_color = st.session_state['category_colors'].get(category, default_color)
+                        
+                        # Find the current color name
+                        current_color_name = None
+                        for name, hex_code in PREDEFINED_COLORS.items():
+                            if hex_code == current_color:
+                                current_color_name = name
+                                break
+                        
+                        if current_color_name is None:
+                            current_color_name = color_names[idx % len(color_names)]
+                        
+                        # Create a visually unified block
+                        color_select_col, preview_col = st.columns([1.5, 1.5])
+                        
+                        with color_select_col:
+                            selected_name = st.selectbox(
+                                f"{category}",
+                                options=color_names,
+                                index=color_names.index(current_color_name) if current_color_name in color_names else 0,
+                                key=f'color_selector_{category}',
+                                label_visibility='visible'
+                            )
+                        
+                        with preview_col:
+                            # Color preview box
+                            selected_hex = PREDEFINED_COLORS[selected_name]
+                            st.markdown(
+                                f'<div style="background-color: {selected_hex}; padding: 8px; border-radius: 3px; text-align: center; color: {"white" if is_dark_color(selected_hex) else "black"}; margin-top: 28px; font-size: 12px;">'
+                                f'Preview</div>',
+                                unsafe_allow_html=True
+                            )
+                        
+                        st.session_state['category_colors'][category] = PREDEFINED_COLORS[selected_name]
         else:
             st.session_state['category_column'] = 'None'
             st.session_state['category_colors'] = {}
