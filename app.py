@@ -565,27 +565,35 @@ with st.sidebar:
             # Color picker for each category  
             if category_column != 'None':
                 st.subheader("Category Order & Colors")
-                st.caption("📦 Drag colored blocks to reorder (top = top of chart)")
+                st.caption("Drag categories to reorder | Click color squares to change")
                 
-                # Add CSS to style the drag boxes
+                # Enhanced CSS for modern, clean design
                 st.markdown("""
                     <style>
-                    /* Style the sortable items */
+                    /* Modern sortable styling */
                     .sortable-item {
-                        background-color: #f0f0f0 !important;
-                        border: 2px solid #d0d0d0 !important;
-                        border-radius: 5px !important;
-                        padding: 10px !important;
-                        margin: 5px 0 !important;
+                        background: white !important;
+                        border: 2px dashed #d0d0d0 !important;
+                        border-radius: 8px !important;
+                        padding: 14px 16px !important;
+                        margin: 10px 0 !important;
+                        cursor: grab !important;
+                        transition: all 0.2s ease !important;
+                        box-shadow: 0 1px 3px rgba(0,0,0,0.08) !important;
                     }
                     .sortable-item:hover {
-                        background-color: #e0e0e0 !important;
-                        border-color: #b0b0b0 !important;
+                        background: #fafafa !important;
+                        border-color: #8884B3 !important;
+                        border-style: solid !important;
+                        box-shadow: 0 2px 8px rgba(136,132,179,0.15) !important;
+                        transform: translateY(-1px) !important;
                     }
-                    /* Override any red styling */
+                    .sortable-item:active {
+                        cursor: grabbing !important;
+                    }
                     .sortable-ghost {
-                        background-color: #d0d0f0 !important;
-                        opacity: 0.5 !important;
+                        opacity: 0.4 !important;
+                        background: #f0f0f0 !important;
                     }
                     </style>
                 """, unsafe_allow_html=True)
@@ -609,92 +617,71 @@ with st.sidebar:
                         default_color = CATEGORY_COLORS[idx % len(CATEGORY_COLORS)]
                         st.session_state['category_colors'][category] = default_color
                 
-                # Create layout
-                col_drag, col_color = st.columns([2, 2])
+                # Simple, clean drag section
+                st.markdown("##### 🔄 Drag to Reorder")
+                st.info("Top category = top of chart stack", icon="ℹ️")
                 
-                with col_drag:
-                    st.markdown("**Drag to reorder:**")
+                # Simple drag interface
+                sorted_categories = sort_items(
+                    st.session_state['sorted_categories'],
+                    direction='vertical',
+                    key='category_sorter'
+                )
+                
+                # Update sorted categories in session state
+                st.session_state['sorted_categories'] = sorted_categories
+                
+                # Update category order based on sorted list (higher number = higher in stack)
+                num_categories = len(sorted_categories)
+                for idx, category in enumerate(sorted_categories):
+                    st.session_state['category_order'][category] = num_categories - idx
+                
+                st.markdown("---")
+                
+                # Beautiful color selection section
+                st.markdown("##### 🎨 Assign Colors")
+                
+                for idx, category in enumerate(sorted_categories):
+                    current_color = st.session_state['category_colors'].get(category, CATEGORY_COLORS[idx % len(CATEGORY_COLORS)])
                     
-                    # Show colored blocks alongside category names for the drag interface
-                    # Map colors to emojis for visual indication
-                    color_to_emoji = {
-                        '#302A7E': '🟪',  # Dark Purple - dark square
-                        '#8884B3': '🟣',  # Medium Purple - medium circle
-                        '#D0CCE5': '⬜'   # Light Lavender - light square
-                    }
-                    
-                    # Create drag items with color emojis
-                    drag_items_with_colors = []
-                    for category in st.session_state['sorted_categories']:
-                        current_hex = st.session_state['category_colors'].get(category, CATEGORY_COLORS[0])
-                        emoji = color_to_emoji.get(current_hex, '⬜')
-                        # Ensure we always have both emoji and category name
-                        drag_item = f"{emoji} {category}"
-                        drag_items_with_colors.append(drag_item)
-                    
-                    # Draggable interface with color indicators
-                    sorted_items_with_colors = sort_items(
-                        drag_items_with_colors,
-                        direction='vertical',
-                        key='category_sorter'
+                    # Category header with gradient background showing current color
+                    text_color = 'white' if is_dark_color(current_color) else '#333'
+                    st.markdown(
+                        f'<div style="background: linear-gradient(135deg, {current_color} 0%, {current_color}ee 100%); '
+                        f'padding: 14px 20px; border-radius: 8px; margin: 20px 0 12px 0; '
+                        f'box-shadow: 0 2px 4px rgba(0,0,0,0.1);">'
+                        f'<strong style="font-size: 16px; color: {text_color};">{category}</strong></div>',
+                        unsafe_allow_html=True
                     )
                     
-                    # Extract category names without emojis
-                    sorted_categories = []
-                    for item in sorted_items_with_colors:
-                        # Split by first space to separate emoji from category name
-                        parts = item.split(' ', 1)
-                        if len(parts) > 1:
-                            sorted_categories.append(parts[1])
-                        else:
-                            # If no space found, use the whole item (fallback)
-                            sorted_categories.append(item)
+                    # Color selection - 3 buttons in a row
+                    cols = st.columns(3)
                     
-                    # Safety check: if extraction failed, use original list
-                    if not sorted_categories:
-                        sorted_categories = st.session_state['sorted_categories']
+                    for col_idx, (color_name, color_hex) in enumerate(PREDEFINED_COLORS.items()):
+                        with cols[col_idx]:
+                            is_selected = (current_color == color_hex)
+                            
+                            # Big, beautiful color square button
+                            if st.button(
+                                "✓ Selected" if is_selected else "Select",
+                                key=f'clr_{category}_{color_name}',
+                                use_container_width=True,
+                                type="primary" if is_selected else "secondary"
+                            ):
+                                st.session_state['category_colors'][category] = color_hex
+                                st.rerun()
+                            
+                            # Large color preview square below
+                            border = "4px solid #000" if is_selected else "2px solid #e0e0e0"
+                            shadow = "0 4px 12px rgba(0,0,0,0.15)" if is_selected else "0 2px 4px rgba(0,0,0,0.08)"
+                            st.markdown(
+                                f'<div style="width: 100%; height: 70px; background-color: {color_hex}; '
+                                f'border-radius: 8px; border: {border}; box-shadow: {shadow}; '
+                                f'margin-top: 8px; transition: all 0.2s ease;"></div>',
+                                unsafe_allow_html=True
+                            )
                     
-                    # Update sorted categories in session state
-                    st.session_state['sorted_categories'] = sorted_categories
-                    
-                    # Update category order based on sorted list (higher number = higher in stack)
-                    num_categories = len(sorted_categories)
-                    for idx, category in enumerate(sorted_categories):
-                        st.session_state['category_order'][category] = num_categories - idx
-                
-                with col_color:
-                    st.markdown("**Select colors:**")
-                    
-                    # Visual color selectors for each category
-                    for idx, category in enumerate(sorted_categories):
-                        current_color = st.session_state['category_colors'].get(category, CATEGORY_COLORS[idx % len(CATEGORY_COLORS)])
-                        
-                        st.markdown(f"**{category}:**")
-                        
-                        # Create clickable color buttons
-                        button_cols = st.columns(3)
-                        
-                        for col_idx, (color_name, color_hex) in enumerate(PREDEFINED_COLORS.items()):
-                            with button_cols[col_idx]:
-                                # Show if this is the currently selected color
-                                is_selected = (current_color == color_hex)
-                                border_style = "3px solid #000000" if is_selected else "1px solid #cccccc"
-                                
-                                # Create clickable color block
-                                if st.button(
-                                    "✓" if is_selected else " ",
-                                    key=f'color_btn_{category}_{color_name}',
-                                    help=color_name,
-                                    use_container_width=True
-                                ):
-                                    st.session_state['category_colors'][category] = color_hex
-                                    st.rerun()
-                                
-                                # Show color preview below button
-                                st.markdown(
-                                    f'<div style="background-color: {color_hex}; height: 30px; border-radius: 3px; border: {border_style}; margin-top: -10px;"></div>',
-                                    unsafe_allow_html=True
-                                )
+                    st.markdown("<div style='margin-bottom: 8px;'></div>", unsafe_allow_html=True)
         else:
             st.session_state['category_column'] = 'None'
             st.session_state['category_colors'] = {}
