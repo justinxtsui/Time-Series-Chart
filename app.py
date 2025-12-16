@@ -26,8 +26,8 @@ PREDEFINED_COLORS = {
 }
 # Define the default single bar color (third color in the palette for a lighter tone)
 SINGLE_BAR_COLOR = '#BBBAF6'
-# Define the prediction shade color (Light Grey, used for the HATCHING edgecolor)
-PREDICTION_HATCH_COLOR = '#F0F0F0'
+# Define the prediction shade color (UPDATED: Medium Grey, used for the HATCHING edgecolor)
+PREDICTION_HATCH_COLOR = '#808080' 
 # Define the line chart color
 LINE_COLOR = '#000000' # Black for high contrast
 # Define the chart title color
@@ -189,12 +189,11 @@ def generate_chart(final_data, category_column, show_bars, show_line, chart_titl
     # Determine which bars/points are for predicted data
     is_predicted = (years >= prediction_start_year) if prediction_start_year is not None else np.full(len(years), False)
 
-    # --- FIX: Define bar_legend_label early to prevent UnboundLocalError ---
+    # Define bar_legend_label early to prevent UnboundLocalError
     if original_value_column == 'received':
         bar_legend_label = 'Total amount received'
     else:
         bar_legend_label = 'Amount raised'
-    # ----------------------------------------------------------------------
     
     # --- DYNAMIC FONT SIZE CALCULATION ---
     
@@ -250,7 +249,7 @@ def generate_chart(final_data, category_column, show_bars, show_line, chart_titl
                     
                     # Hatching logic: Apply hatching only to predicted bars
                     hatch_style = '///' if is_predicted[i] else None
-                    # Set the hatching color to light grey
+                    # Set the hatching color to light grey/medium grey
                     edge_color = PREDICTION_HATCH_COLOR if is_predicted[i] else 'none'
                     
                     alpha_val = 1.0 # Keep alpha 1.0
@@ -268,7 +267,7 @@ def generate_chart(final_data, category_column, show_bars, show_line, chart_titl
                     
                     # Data label logic
                     label_text = format_currency(val)
-                    # Text color logic: Black for light bars, White for dark solid bars
+                    # Text color logic: White for dark bars, Black for light bars
                     text_color = '#FFFFFF' if is_dark_color(color) else '#000000'
                     
                     # Vertical positioning logic (near the base / center):
@@ -297,13 +296,12 @@ def generate_chart(final_data, category_column, show_bars, show_line, chart_titl
                 
                 # Hatching logic: Apply hatching only to predicted bars
                 hatch_style = '///' if is_predicted[i] else None
-                # Set the hatching color to light grey
+                # Set the hatching color to light grey/medium grey
                 edge_color = PREDICTION_HATCH_COLOR if is_predicted[i] else 'none'
                 
                 alpha_val = 1.0 
                 
                 # Only use label in legend for the first category instance (i==0)
-                # bar_legend_label is now guaranteed to be defined
                 label_str = bar_legend_label if i == 0 else '_nolegend_'
                 
                 chart_ax1.bar(x, val, bar_width,
