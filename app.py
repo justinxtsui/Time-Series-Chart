@@ -127,8 +127,16 @@ def load_data(uploaded_file):
     try:
         data[DATE_COLUMN] = pd.to_datetime(data[DATE_COLUMN], format='%d/%m/%Y', errors='coerce')
         data.dropna(subset=[DATE_COLUMN], inplace=True)
-    except Exception:
-        return None, f"Could not convert **`{DATE_COLUMN}`** to datetime format.", None
+        # Convert value column to numeric, setting errors='coerce' to turn bad values to NaN
+        data[VALUE_COLUMN] = pd.to_numeric(data[VALUE_COLUMN], errors='coerce')
+        data.dropna(subset=[VALUE_COLUMN], inplace=True)
+
+    except Exception as e:
+        return None, f"An error occurred during data conversion: {e}", None
+    
+    # *** FIX: Check if the DataFrame is empty after cleanup/conversion ***
+    if data.empty:
+        return None, "File loaded but contained no valid rows after processing (missing date or value).", None
 
     return data, None, original_value_column
 
@@ -412,7 +420,7 @@ def generate_chart(final_data, category_column, show_bars, show_line, chart_titl
     legend_elements = []
     
     # Define large font size for legend
-    LEGEND_FONT_SIZE = 18  # Legend font size
+    LEGEND_FONT_SIZE = 18 # Legend font size
     LEGEND_MARKER_SIZE = 16
     
     # --- BAR LEGEND ENTRIES (Actual data only) ---
@@ -518,358 +526,398 @@ with st.sidebar:
     # --- Load Data and Set Default Years ---
     if uploaded_file:
         df_base, error_msg, original_value_column = load_data(uploaded_file)
-        if df_base is None:
-            st.error(error_msg)
-            st.stop()
-    
-        st.caption(f"Loaded **{df_base.shape[0]}** rows for processing.")
-        # Store original_value_column in session state
-        st.session_state['original_value_column'] = original_value_column
         
-        # Calculate min/max years based on loaded data
-        min_year = int(df_base[DATE_COLUMN].dt.year.min())
-        max_year = int(df_base[DATE_COLUMN].dt.year.max())
-        all_years = list(range(min_year, max_year + 1))
-        
-        default_start = min_year
-        default_end = max_year
-        
-        # --- Continue with the rest of the configuration blocks only if data is loaded ---
-        
-        # --- 2. CHART TITLE ---
-        st.markdown("---")
-        st.header("2. Chart Title")
-        
-        custom_title = st.text_input(
-            "Chart Title",
-            value=st.session_state.get('chart_title', DEFAULT_TITLE),
-            key='chart_title_input',
-            help="Customize the title shown above the chart."
-        )
-        st.session_state['chart_title'] = custom_title
-        
-        # --- 3. TIME FILTERS ---
-        st.markdown("---")
-        st.header("3. Time Filters")
-        
-        current_start, current_end = st.session_state.get('year_range', (default_start, default_end))
-        
-        col_start, col_end = st.columns(2)
-        
-        with col_start:
-            start_year = st.selectbox(
-                "Start Year",
-                options=all_years,
-                # Safely determine index
-                index=all_years.index(current_start) if current_start in all_years else 0,
-                key='start_year_selector',
-                help="First year of data to include."
+        # Check if df_base was successfully loaded
+        if df_base is not None:
+            st.caption(f"Loaded **{df_base.shape[0]}** rows for processing.")
+            # Store original_value_column in session state
+            st.session_state['original_value_column'] = original_value_column
+            
+            # **FIX: df_base is now guaranteed to be a non-empty DataFrame here.**
+            # Calculate min/max years based on loaded data
+            min_year = int(df_base[DATE_COLUMN].dt.year.min())
+            max_year = int(df_base[DATE_COLUMN].dt.year.max())
+            all_years = list(range(min_year, max_year + 1))
+            
+            default_start = min_year
+            default_end = max_year
+            
+            # --- Continue with the rest of the configuration blocks only if data is loaded ---
+            
+            # --- 2. CHART TITLE ---
+            st.markdown("---")
+            st.header("2. Chart Title")
+            
+            custom_title = st.text_input(
+                "Chart Title",
+                value=st.session_state.get('chart_title', DEFAULT_TITLE),
+                key='chart_title_input',
+                help="Customize the title shown above the chart."
             )
+            st.session_state['chart_title'] = custom_title
             
-        with col_end:
-            end_year = st.selectbox(
-                "End Year",
-                options=all_years,
-                # Safely determine index
-                index=all_years.index(current_end) if current_end in all_years else len(all_years) - 1,
-                key='end_year_selector',
-                help="Last year of data to include."
-            )
+            # --- 3. TIME FILTERS ---
+            st.markdown("---")
+            st.header("3. Time Filters")
             
-        if start_year > end_year:
-            st.error("Start Year must be <= End Year.")
-            st.stop()
+            current_start, current_end = st.session_state.get('year_range', (default_start, default_end))
             
-        year_range = (start_year, end_year)
-        
-        # --- 4. VISUAL ELEMENTS ---
-        st.markdown("---")
-        st.header("4. Visual Elements")
-        
-        col_elem_1, col_elem_2 = st.columns(2)
-        
-        with col_elem_1:
-            show_bars = st.checkbox(
-                "Show bar for deal value",
-                value=st.session_state.get('show_bars', True),
-                key='show_bars_selector'
-            )
-        with col_elem_2:
-            show_line = st.checkbox(
-                "Show line for number of deals",
-                value=st.session_state.get('show_line', True),
-                key='show_line_selector'
-            )
-        
-        if not show_bars and not show_line:
-            st.warning("Select at least one element.")
-            st.stop()
-        
-        # Update session state
-        st.session_state['year_range'] = year_range
-        st.session_state['show_bars'] = show_bars
-        st.session_state['show_line'] = show_line
-        
-        # --- PREDICTION TOGGLE AND YEAR SELECT ---
-        st.subheader("Prediction Visuals (Dotted Line / Hatched Bar)")
-        enable_prediction = st.checkbox("Enable prediction mode", key='enable_prediction_checkbox')
-        
-        prediction_start_year = None
-        
-        # Check if the currently filtered time range has any years
-        filtered_years = list(range(start_year, end_year + 1))
-        
-        if enable_prediction and filtered_years:
-            # Only allow selection of years that are visible in the chart
-            prediction_options = ['None'] + filtered_years
+            # Ensure current_start/end are within the actual min/max range
+            current_start = max(min_year, min(max_year, current_start))
+            current_end = max(min_year, min(max_year, current_end))
             
-            # Find the index of the current or last year
-            default_year_to_select = st.session_state['prediction_start_year']
-            if default_year_to_select not in prediction_options:
-                # If the previous selection is outside the new range, default to the last year of the range
-                default_year_to_select = filtered_years[-1] if filtered_years else 'None'
+            col_start, col_end = st.columns(2)
             
-            default_index = prediction_options.index(default_year_to_select) if default_year_to_select != 'None' else 0
-            
-            selected_prediction_year = st.selectbox(
-                "Start Year for Prediction/Shading",
-                options=prediction_options,
-                index=default_index,
-                key='prediction_year_selector',
-                help="Data from this year (inclusive) will be rendered as predicted (dotted line/hatched bars)."
-            )
-            
-            if selected_prediction_year != 'None':
-                prediction_start_year = int(selected_prediction_year)
-                # Ensure the prediction year is within the selected filter range
-                if prediction_start_year < start_year or prediction_start_year > end_year:
-                    st.warning(f"Prediction start year {prediction_start_year} is outside the time filter range ({start_year}-{end_year}). Prediction styling will not be shown.")
-                    prediction_start_year = None
-            
-        st.session_state['prediction_start_year'] = prediction_start_year
-        
-        # --- 5. STACKED BAR (OPTIONAL) ---
-        st.markdown("---")
-        st.header("5. Stacked bar? (Optional)")
-
-        stacked_enabled = st.checkbox('Enable Stacked Bar', value=st.session_state.get('stacked_enabled', False))
-        st.session_state['stacked_enabled'] = stacked_enabled
-
-        if stacked_enabled:
-            config_columns = [col for col in df_base.columns if col not in [DATE_COLUMN, VALUE_COLUMN]]
-            category_columns = ['None'] + sorted(config_columns)
-            
-            category_column = st.selectbox(
-                "Select Column for Stacking",
-                category_columns,
-                index=category_columns.index(st.session_state.get('category_column', 'None')),
-                key='category_col_selector',
-                help="Select a column to stack and color-code the bars."
-            )
-            st.session_state['category_column'] = category_column
-            
-            # Color picker for each category  
-            if category_column != 'None':
-                st.subheader("Category Order & Colors")
-                
-                # Enhanced CSS for modern, clean design
-                st.markdown("""
-                    <style>
-                    /* Modern sortable styling */
-                    .sortable-item {
-                        background: white !important;
-                        border: 2px dashed #d0d0d0 !important;
-                        border-radius: 8px !important;
-                        padding: 14px 16px !important;
-                        margin: 10px 0 !important;
-                        cursor: grab !important;
-                        transition: all 0.2s ease !important;
-                        box-shadow: 0 1px 3px rgba(0,0,0,0.08) !important;
-                    }
-                    .sortable-item:hover {
-                        background: #fafafa !important;
-                        border-color: #8884B3 !important;
-                        border-style: solid !important;
-                        box-shadow: 0 2px 8px rgba(136,132,179,0.15) !important;
-                        transform: translateY(-1px) !important;
-                    }
-                    .sortable-item:active {
-                        cursor: grabbing !important;
-                    }
-                    .sortable-ghost {
-                        opacity: 0.4 !important;
-                        background: #f0f0f0 !important;
-                    }
-                    </style>
-                """, unsafe_allow_html=True)
-                
-                # Get unique categories from the selected column
-                unique_categories = sorted(df_base[category_column].dropna().unique())
-                
-                # Initialize category_colors and category_order in session state if not exists
-                if 'category_colors' not in st.session_state:
-                    st.session_state['category_colors'] = {}
-                if 'category_order' not in st.session_state:
-                    st.session_state['category_order'] = {}
-                
-                # Initialize sorted category list if not exists or if categories changed
-                if 'sorted_categories' not in st.session_state or set(st.session_state.get('sorted_categories', [])) != set(unique_categories):
-                    st.session_state['sorted_categories'] = list(reversed(unique_categories))  # Reversed so top = top
-                
-                # Pre-assign colors before showing drag interface
-                for idx, category in enumerate(st.session_state['sorted_categories']):
-                    if category not in st.session_state['category_colors']:
-                        default_color = CATEGORY_COLORS[idx % len(CATEGORY_COLORS)]
-                        st.session_state['category_colors'][category] = default_color
-                
-                # Drag section
-                st.markdown("**Drag to Reorder**")
-                
-                # Simple drag interface
-                sorted_categories = sort_items(
-                    st.session_state['sorted_categories'],
-                    direction='vertical',
-                    key='category_sorter'
+            with col_start:
+                # Calculate default index for start year safely
+                try:
+                    start_index = all_years.index(current_start)
+                except ValueError:
+                    start_index = 0
+                    
+                start_year = st.selectbox(
+                    "Start Year",
+                    options=all_years,
+                    index=start_index,
+                    key='start_year_selector',
+                    help="First year of data to include."
                 )
                 
-                # Update sorted categories in session state
-                st.session_state['sorted_categories'] = sorted_categories
-                
-                # Update category order based on sorted list (higher number = higher in stack)
-                num_categories = len(sorted_categories)
-                for idx, category in enumerate(sorted_categories):
-                    st.session_state['category_order'][category] = num_categories - idx
-                
-                st.markdown("---")
-                
-                # Color selection section
-                st.markdown("**Assign Colors**")
-                
-                for idx, category in enumerate(sorted_categories):
-                    current_color = st.session_state['category_colors'].get(category, CATEGORY_COLORS[idx % len(CATEGORY_COLORS)])
+            with col_end:
+                # Calculate default index for end year safely
+                try:
+                    end_index = all_years.index(current_end)
+                except ValueError:
+                    end_index = len(all_years) - 1
                     
-                    # Create row with category, dropdown, and color box
-                    col1, col2, col3 = st.columns([1, 1.5, 0.5])
+                end_year = st.selectbox(
+                    "End Year",
+                    options=all_years,
+                    index=end_index,
+                    key='end_year_selector',
+                    help="Last year of data to include."
+                )
+                
+            if start_year > end_year:
+                st.error("Start Year must be <= End Year. Please adjust.")
+                # We stop here to prevent running the chart generation with an invalid range
+                st.stop() 
+                
+            year_range = (start_year, end_year)
+            
+            # --- 4. VISUAL ELEMENTS ---
+            st.markdown("---")
+            st.header("4. Visual Elements")
+            
+            col_elem_1, col_elem_2 = st.columns(2)
+            
+            with col_elem_1:
+                show_bars = st.checkbox(
+                    "Show bar for deal value",
+                    value=st.session_state.get('show_bars', True),
+                    key='show_bars_selector'
+                )
+            with col_elem_2:
+                show_line = st.checkbox(
+                    "Show line for number of deals",
+                    value=st.session_state.get('show_line', True),
+                    key='show_line_selector'
+                )
+            
+            if not show_bars and not show_line:
+                st.warning("Select at least one element (Bar or Line) to display a chart.")
+                st.stop()
+                
+            # Update session state
+            st.session_state['year_range'] = year_range
+            st.session_state['show_bars'] = show_bars
+            st.session_state['show_line'] = show_line
+            
+            # --- PREDICTION TOGGLE AND YEAR SELECT ---
+            st.subheader("Prediction Visuals (Dotted Line / Hatched Bar)")
+            enable_prediction = st.checkbox("Enable prediction mode", key='enable_prediction_checkbox')
+            
+            prediction_start_year = None
+            
+            # Check if the currently filtered time range has any years
+            filtered_years = list(range(start_year, end_year + 1))
+            
+            if enable_prediction and filtered_years:
+                # Only allow selection of years that are visible in the chart
+                prediction_options = ['None'] + filtered_years
+                
+                # Find the index of the current or last year
+                default_year_to_select = st.session_state['prediction_start_year']
+                if default_year_to_select not in prediction_options:
+                    # If the previous selection is outside the new range, default to the last year of the range
+                    default_year_to_select = filtered_years[-1] if filtered_years else 'None'
+                
+                default_index = prediction_options.index(default_year_to_select) if default_year_to_select != 'None' else 0
+                
+                selected_prediction_year = st.selectbox(
+                    "Start Year for Prediction/Shading",
+                    options=prediction_options,
+                    index=default_index,
+                    key='prediction_year_selector',
+                    help="Data from this year (inclusive) will be rendered as predicted (dotted line/hatched bars)."
+                )
+                
+                if selected_prediction_year != 'None':
+                    prediction_start_year = int(selected_prediction_year)
+                    # Ensure the prediction year is within the selected filter range
+                    if prediction_start_year < start_year or prediction_start_year > end_year:
+                        # Don't stop, but warn and disable the feature for this run
+                        st.warning(f"Prediction start year {prediction_start_year} is outside the time filter range ({start_year}-{end_year}). Prediction styling will not be shown.")
+                        prediction_start_year = None
+                
+            st.session_state['prediction_start_year'] = prediction_start_year
+            
+            # --- 5. STACKED BAR (OPTIONAL) ---
+            st.markdown("---")
+            st.header("5. Stacked bar? (Optional)")
+
+            stacked_enabled = st.checkbox('Enable Stacked Bar', value=st.session_state.get('stacked_enabled', False))
+            st.session_state['stacked_enabled'] = stacked_enabled
+
+            if stacked_enabled:
+                config_columns = [col for col in df_base.columns if col not in [DATE_COLUMN, VALUE_COLUMN]]
+                category_columns = ['None'] + sorted(config_columns)
+                
+                category_column = st.selectbox(
+                    "Select Column for Stacking",
+                    category_columns,
+                    index=category_columns.index(st.session_state.get('category_column', 'None')) if st.session_state.get('category_column', 'None') in category_columns else 0,
+                    key='category_col_selector',
+                    help="Select a column to stack and color-code the bars."
+                )
+                st.session_state['category_column'] = category_column
+                
+                # Color picker for each category 
+                if category_column != 'None':
+                    st.subheader("Category Order & Colors")
                     
-                    with col1:
-                        # Category name
-                        st.markdown(f"<div style='padding-top: 8px; font-size: 16px;'><strong>{category}</strong></div>", unsafe_allow_html=True)
+                    # Enhanced CSS for modern, clean design
+                    st.markdown("""
+                        <style>
+                        /* Modern sortable styling */
+                        .sortable-item {
+                            background: white !important;
+                            border: 2px dashed #d0d0d0 !important;
+                            border-radius: 8px !important;
+                            padding: 14px 16px !important;
+                            margin: 10px 0 !important;
+                            cursor: grab !important;
+                            transition: all 0.2s ease !important;
+                            box-shadow: 0 1px 3px rgba(0,0,0,0.08) !important;
+                        }
+                        .sortable-item:hover {
+                            background: #fafafa !important;
+                            border-color: #8884B3 !important;
+                            border-style: solid !important;
+                            box-shadow: 0 2px 8px rgba(136,132,179,0.15) !important;
+                            transform: translateY(-1px) !important;
+                        }
+                        .sortable-item:active {
+                            cursor: grabbing !important;
+                        }
+                        .sortable-ghost {
+                            opacity: 0.4 !important;
+                            background: #f0f0f0 !important;
+                        }
+                        </style>
+                    """, unsafe_allow_html=True)
                     
-                    with col2:
-                        # Dropdown with just hex codes (no emojis)
-                        color_options = list(PREDEFINED_COLORS.values())
+                    # Get unique categories from the selected column
+                    unique_categories = sorted(df_base[category_column].dropna().astype(str).unique())
+                    
+                    # Initialize category_colors and category_order in session state if not exists
+                    if 'category_colors' not in st.session_state:
+                        st.session_state['category_colors'] = {}
+                    if 'category_order' not in st.session_state:
+                        st.session_state['category_order'] = {}
+                    
+                    # Initialize sorted category list if not exists or if categories changed
+                    current_sorted = st.session_state.get('sorted_categories', [])
+                    if set(current_sorted) != set(unique_categories):
+                        # Use new unique categories, maintaining order for existing ones
+                        st.session_state['sorted_categories'] = [cat for cat in current_sorted if cat in unique_categories]
+                        st.session_state['sorted_categories'].extend([cat for cat in unique_categories if cat not in current_sorted])
+                        st.session_state['sorted_categories'] = list(reversed(st.session_state['sorted_categories'])) # Reversed so top = top
+                    
+                    # Pre-assign colors before showing drag interface
+                    for idx, category in enumerate(st.session_state['sorted_categories']):
+                        if category not in st.session_state['category_colors']:
+                            default_color = CATEGORY_COLORS[idx % len(CATEGORY_COLORS)]
+                            st.session_state['category_colors'][category] = default_color
+                    
+                    # Drag section
+                    st.markdown("**Drag to Reorder**")
+                    
+                    # Simple drag interface
+                    sorted_categories = sort_items(
+                        st.session_state['sorted_categories'],
+                        direction='vertical',
+                        key='category_sorter'
+                    )
+                    
+                    # Update sorted categories in session state
+                    st.session_state['sorted_categories'] = sorted_categories
+                    
+                    # Update category order based on sorted list (higher number = higher in stack)
+                    num_categories = len(sorted_categories)
+                    for idx, category in enumerate(sorted_categories):
+                        st.session_state['category_order'][category] = num_categories - idx
+                    
+                    st.markdown("---")
+                    
+                    # Color selection section
+                    st.markdown("**Assign Colors**")
+                    
+                    for idx, category in enumerate(sorted_categories):
+                        current_color = st.session_state['category_colors'].get(category, CATEGORY_COLORS[idx % len(CATEGORY_COLORS)])
                         
-                        selected_hex = st.selectbox(
-                            f"Color for {category}",
-                            options=color_options,
-                            index=color_options.index(current_color) if current_color in color_options else 0,
-                            key=f'color_select_{category}',
-                            label_visibility='collapsed'
-                        )
+                        # Create row with category, dropdown, and color box
+                        col1, col2, col3 = st.columns([1, 1.5, 0.5])
                         
-                        st.session_state['category_colors'][category] = selected_hex
-                    
-                    with col3:
-                        # Colored square box showing selected color
-                        st.markdown(
-                            f'<div style="background-color: {selected_hex}; height: 38px; width: 100%; '
-                            f'border-radius: 4px; border: 2px solid #ddd; margin-top: 0px;"></div>',
-                            unsafe_allow_html=True
-                        )
-        else:
-            st.session_state['category_column'] = 'None'
-            st.session_state['category_colors'] = {}
-            st.session_state['category_order'] = {}
-            if 'sorted_categories' in st.session_state:
-                del st.session_state['sorted_categories']
-
-        # --- 6. DATA FILTER ---
-        st.markdown("---")
-        st.header("6. Data Filter")
-
-        filter_enabled = st.checkbox('Enable Data Filtering', value=st.session_state['filter_enabled'])
-        st.session_state['filter_enabled'] = filter_enabled
-
-        if filter_enabled:
-            
-            filter_columns = [c for c in df_base.columns if df_base[c].dtype in ['object', 'category'] and c not in [DATE_COLUMN]]
-            filter_columns = ['None'] + sorted(filter_columns)
-            
-            filter_column = st.selectbox(
-                "Select Column to Filter",
-                filter_columns,
-                index=filter_columns.index(st.session_state['filter_column']) if st.session_state['filter_column'] in filter_columns else 0,
-                key='filter_col_selector'
-            )
-            st.session_state['filter_column'] = filter_column
-
-            if filter_column != 'None':
-                
-                # Fetch unique values for the selected column
-                unique_values = df_base[filter_column].astype(str).unique().tolist()
-                
-                filter_mode = st.radio(
-                    "Filter Mode",
-                    options=["Include selected values", "Exclude selected values"],
-                    index=0 if st.session_state['filter_include'] else 1,
-                    key='filter_mode_radio'
-                )
-                
-                st.session_state['filter_include'] = (filter_mode == "Include selected values")
-                
-                # Use default from session state or all unique values if first run
-                default_selection = st.session_state['filter_values'] if st.session_state['filter_values'] else unique_values
-                
-                selected_values = st.multiselect(
-                    f"Select values in '{filter_column}'",
-                    options=unique_values,
-                    default=[v for v in default_selection if v in unique_values], # Ensure defaults are valid options
-                    key='filter_values_selector'
-                )
-                st.session_state['filter_values'] = selected_values
+                        with col1:
+                            # Category name
+                            st.markdown(f"<div style='padding-top: 8px; font-size: 16px;'><strong>{category}</strong></div>", unsafe_allow_html=True)
+                        
+                        with col2:
+                            # Dropdown with just hex codes (no emojis)
+                            color_options = list(PREDEFINED_COLORS.values())
+                            
+                            selected_hex = st.selectbox(
+                                f"Color for {category}",
+                                options=color_options,
+                                index=color_options.index(current_color) if current_color in color_options else 0,
+                                key=f'color_select_{category}',
+                                label_visibility='collapsed'
+                            )
+                            
+                            st.session_state['category_colors'][category] = selected_hex
+                        
+                        with col3:
+                            # Colored square box showing selected color
+                            st.markdown(
+                                f'<div style="background-color: {selected_hex}; height: 38px; width: 100%; '
+                                f'border-radius: 4px; border: 2px solid #ddd; margin-top: 0px;"></div>',
+                                unsafe_allow_html=True
+                            )
             else:
-                st.session_state['filter_values'] = []
+                st.session_state['category_column'] = 'None'
+                st.session_state['category_colors'] = {}
+                st.session_state['category_order'] = {}
+                if 'sorted_categories' in st.session_state:
+                    del st.session_state['sorted_categories']
 
-        # --- 7. DOWNLOAD SECTION ---
-        st.markdown("---")
-        st.header("7. Download Chart")
-        
-        with st.expander("Download Options", expanded=True):
-            st.caption("Download your generated chart file.")
-            st.download_button(
-                label="Download as **PNG** (High-Res)",
-                data=st.session_state.get('buf_png', BytesIO()),
-                file_name=f"{custom_title.replace(' ', '_').lower()}_chart.png",
-                mime="image/png",
-                key="download_png",
-                use_container_width=True
-            )
-            st.download_button(
-                label="Download as **SVG** (Vector)",
-                data=st.session_state.get('buf_svg', BytesIO()),
-                file_name=f"{custom_title.replace(' ', '_').lower()}_chart.svg",
-                mime="image/svg+xml",
-                key="download_svg",
-                use_container_width=True
-            )
+            # --- 6. DATA FILTER ---
+            st.markdown("---")
+            st.header("6. Data Filter")
+
+            filter_enabled = st.checkbox('Enable Data Filtering', value=st.session_state.get('filter_enabled', False))
+            st.session_state['filter_enabled'] = filter_enabled
+
+            if filter_enabled:
+                
+                filter_columns = [c for c in df_base.columns if df_base[c].dtype in ['object', 'category'] and c not in [DATE_COLUMN]]
+                filter_columns = ['None'] + sorted(filter_columns)
+                
+                filter_column = st.selectbox(
+                    "Select Column to Filter",
+                    filter_columns,
+                    index=filter_columns.index(st.session_state.get('filter_column', 'None')) if st.session_state.get('filter_column', 'None') in filter_columns else 0,
+                    key='filter_col_selector'
+                )
+                st.session_state['filter_column'] = filter_column
+
+                if filter_column != 'None':
+                    
+                    # Fetch unique values for the selected column, coercing to string to handle all types
+                    unique_values = df_base[filter_column].astype(str).unique().tolist()
+                    
+                    filter_mode = st.radio(
+                        "Filter Mode",
+                        options=["Include selected values", "Exclude selected values"],
+                        index=0 if st.session_state.get('filter_include', True) else 1,
+                        key='filter_mode_radio'
+                    )
+                    
+                    st.session_state['filter_include'] = (filter_mode == "Include selected values")
+                    
+                    # Use default from session state or all unique values if first run
+                    default_selection = st.session_state.get('filter_values', unique_values)
+                    
+                    selected_values = st.multiselect(
+                        f"Select values in '{filter_column}'",
+                        options=unique_values,
+                        default=[v for v in default_selection if v in unique_values], # Ensure defaults are valid options
+                        key='filter_values_selector'
+                    )
+                    st.session_state['filter_values'] = selected_values
+                else:
+                    st.session_state['filter_values'] = []
+                    st.session_state['filter_column'] = 'None' # Reset column if filter is active but column is 'None'
+
+            # --- 7. DOWNLOAD SECTION ---
+            st.markdown("---")
+            st.header("7. Download Chart")
+            
+            with st.expander("Download Options", expanded=True):
+                st.caption("Download your generated chart file.")
+                st.download_button(
+                    label="Download as **PNG** (High-Res)",
+                    data=st.session_state.get('buf_png', BytesIO()),
+                    file_name=f"{custom_title.replace(' ', '_').lower()}_chart.png",
+                    mime="image/png",
+                    key="download_png",
+                    use_container_width=True
+                )
+                st.download_button(
+                    label="Download as **SVG** (Vector)",
+                    data=st.session_state.get('buf_svg', BytesIO()),
+                    file_name=f"{custom_title.replace(' ', '_').lower()}_chart.svg",
+                    mime="image/svg+xml",
+                    key="download_svg",
+                    use_container_width=True
+                )
+        else:
+            # This handles the case where uploaded_file is present but load_data failed
+            st.error(error_msg)
+            # Ensure df_base is None so the main block displays the help message
+            df_base = None
+
+    # This check ensures that the main body only runs if data was loaded successfully
+    if df_base is None:
+        # If no file uploaded or file load failed, clear out the configuration states 
+        # that depend on the data structure, to avoid stale values
+        st.session_state['category_column'] = 'None'
+        st.session_state['filter_column'] = 'None'
+        st.session_state['filter_values'] = []
+        if 'sorted_categories' in st.session_state:
+             del st.session_state['sorted_categories']
 
 
 # --- MAIN AREA: CHART DISPLAY ONLY ---
+
+# Check both local scope and session state for the presence of df_base if necessary,
+# but relying on df_base in local scope (set in sidebar) is better.
 
 if 'df_base' in locals() and df_base is not None:
     
     # Apply dynamic filter first
     filter_config = {
-        'enabled': st.session_state['filter_enabled'],
-        'column': st.session_state['filter_column'],
-        'include': st.session_state['filter_include'],
-        'values': st.session_state['filter_values']
+        'enabled': st.session_state.get('filter_enabled', False),
+        'column': st.session_state.get('filter_column', 'None'),
+        'include': st.session_state.get('filter_include', True),
+        'values': st.session_state.get('filter_values', [])
     }
     
     df_filtered = apply_filter(df_base, filter_config)
     
     if df_filtered.empty:
         st.error("The selected filters resulted in no data. Please adjust your configuration.")
+        # Need to re-stop if data is filtered out
         st.stop()
         
     # Process the data
