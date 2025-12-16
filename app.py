@@ -38,7 +38,8 @@ APP_TITLE_COLOR = '#000000'
 DEFAULT_TITLE = 'Grant Funding and Deal Count Over Time'
 
 # Set page config and general styles
-st.set_set_page_config(page_title="Time Series Chart Generator", layout="wide", initial_sidebar_state="expanded")
+# *** CORRECTION APPLIED HERE ***
+st.set_page_config(page_title="Time Series Chart Generator", layout="wide", initial_sidebar_state="expanded")
 plt.rcParams['font.family'] = 'sans-serif'
 plt.rcParams['font.sans-serif'] = ['Arial', 'Public Sans', 'DejaVu Sans']
 
@@ -261,7 +262,7 @@ def generate_chart(final_data, category_column, show_bars, show_line, chart_titl
                     
                     # Data label logic
                     label_text = format_currency(val)
-                    # Text color logic: White for dark bars, Black for light bars (light grey hatching on purple is OK)
+                    # Text color logic: Black for light bars (including the new light grey hatching on purple is OK), White for dark solid bars
                     text_color = '#FFFFFF' if is_dark_color(color) else '#000000'
                     
                     # Vertical positioning logic (near the base / center):
