@@ -26,8 +26,10 @@ PREDEFINED_COLORS = {
 }
 # Define the default single bar color (third color in the palette for a lighter tone)
 SINGLE_BAR_COLOR = '#BBBAF6'
-# Define the prediction shade color (Medium Grey, used for the HATCHING edgecolor)
-PREDICTION_HATCH_COLOR = '#808080' 
+# Define the prediction shade color (LIGHT GREY FILL for predicted bars)
+PREDICTION_SHADE_COLOR = '#F0F0F0' 
+# Define the prediction hatching color (BLACK HATCH for maximum contrast over light grey)
+PREDICTION_HATCH_COLOR = '#000000' 
 # Define the line chart color
 LINE_COLOR = '#000000' # Black for high contrast
 # Define the chart title color
@@ -244,15 +246,16 @@ def generate_chart(final_data, category_column, show_bars, show_line, chart_titl
                 val = final_data[cat].iloc[i]
                 
                 if show_bars and val > 0:
-                    # Bar color remains the base color (purple/lavender) for both actual and predicted data
-                    bar_color = color
                     
-                    # Hatching logic: Apply hatching only to predicted bars
-                    hatch_style = 'xx' if is_predicted[i] else None # Use 'xx' for thicker lines
-                    # Set the hatching color to medium grey
+                    # --- SHADING REVERT: Predicted bar uses PREDICTION_SHADE_COLOR (Light Grey) ---
+                    bar_color = PREDICTION_SHADE_COLOR if is_predicted[i] else color
+                    
+                    # Hatching: Always use 'xx' if predicted, with black/dark hatching color
+                    hatch_style = 'xx' if is_predicted[i] else None
                     edge_color = PREDICTION_HATCH_COLOR if is_predicted[i] else 'none'
-                    
-                    alpha_val = 1.0 # Keep alpha 1.0
+                    # ---------------------------------------------------------------------------------
+
+                    alpha_val = 1.0 
                     
                     # Plot the bar
                     label_str = cat if i == 0 else '_nolegend_'
@@ -267,8 +270,11 @@ def generate_chart(final_data, category_column, show_bars, show_line, chart_titl
                     
                     # Data label logic
                     label_text = format_currency(val)
-                    # Text color logic: White for dark bars, Black for light bars
-                    text_color = '#FFFFFF' if is_dark_color(color) else '#000000'
+                    # Text color logic: Always Black for light bars (light grey and light lavender), White for dark purple
+                    
+                    # Determine base color for dark check (if it's predicted, the base is PREDICTION_SHADE_COLOR)
+                    check_color = PREDICTION_SHADE_COLOR if is_predicted[i] else color
+                    text_color = '#FFFFFF' if is_dark_color(check_color) else '#000000'
                     
                     # Vertical positioning logic (near the base / center):
                     if idx == 0:
@@ -291,14 +297,14 @@ def generate_chart(final_data, category_column, show_bars, show_line, chart_titl
                 x = x_pos[i]
                 val = final_data[VALUE_COLUMN].iloc[i]
                 
-                # Bar color remains the single bar color for both actual and predicted data
-                bar_color = SINGLE_BAR_COLOR
+                # --- SHADING REVERT: Predicted bar uses PREDICTION_SHADE_COLOR (Light Grey) ---
+                bar_color = PREDICTION_SHADE_COLOR if is_predicted[i] else SINGLE_BAR_COLOR
                 
-                # Hatching logic: Apply hatching only to predicted bars
-                hatch_style = 'xx' if is_predicted[i] else None # Use 'xx' for thicker lines
-                # Set the hatching color to medium grey
+                # Hatching: Always use 'xx' if predicted, with black/dark hatching color
+                hatch_style = 'xx' if is_predicted[i] else None
                 edge_color = PREDICTION_HATCH_COLOR if is_predicted[i] else 'none'
-                
+                # ---------------------------------------------------------------------------------
+
                 alpha_val = 1.0 
                 
                 # Only use label in legend for the first category instance (i==0)
@@ -314,7 +320,7 @@ def generate_chart(final_data, category_column, show_bars, show_line, chart_titl
         
                 if val > 0:
                     label_text = format_currency(val)
-                    # Text color logic: Black for the light single bar color
+                    # Text color logic: Black for the light bar color (SINGLE_BAR_COLOR is light purple, PREDICTION_SHADE_COLOR is light grey)
                     text_color = '#000000'
 
                     # Vertical positioning logic (near the base):
@@ -418,13 +424,11 @@ def generate_chart(final_data, category_column, show_bars, show_line, chart_titl
                     color = category_colors[cat]
                 else:
                     color = CATEGORY_COLORS[idx % len(CATEGORY_COLORS)]
-                # Use circle marker ('o') and remove edge color
                 legend_elements.append(Line2D([0], [0], marker='o', linestyle='',
                                               markerfacecolor=color, markersize=LEGEND_MARKER_SIZE * 0.7, 
                                               markeredgecolor='none', label=cat))
         else:
             # Single bar
-            # Use circle marker ('o') and remove edge color
             legend_elements.append(Line2D([0], [0], marker='o', linestyle='',
                                           markerfacecolor=SINGLE_BAR_COLOR, markersize=LEGEND_MARKER_SIZE * 0.7, 
                                           markeredgecolor='none', label=bar_legend_label))
@@ -432,7 +436,7 @@ def generate_chart(final_data, category_column, show_bars, show_line, chart_titl
 
     # --- LINE LEGEND ENTRY (Single Entry for all "Number of Deals") ---
     if show_line:
-        # Add a single entry for the line count (uses default line marker: circle)
+        # Add a single entry for the line count
         legend_elements.append(Line2D([0], [0], color=LINE_COLOR, marker='o', linestyle='-', linewidth=1.5, markersize=6, label='Number of deals'))
 
 
@@ -523,6 +527,13 @@ with st.sidebar:
         
     if df_base is not None:
         
+        # --- 3. TIME FILTERS: Data Initialization moved here ---
+        # FIX for min_year access error: Ensure these are inside the df_base check
+        min_year = int(df_base[DATE_COLUMN].dt.year.min())
+        max_year = int(df_base[DATE_COLUMN].dt.year.max())
+        all_years = list(range(min_year, max_year + 1))
+        # ----------------------------------------------------
+        
         # --- 2. CHART TITLE ---
         st.markdown("---")
         st.header("2. Chart Title")
@@ -538,11 +549,6 @@ with st.sidebar:
         # --- 3. TIME FILTERS ---
         st.markdown("---")
         st.header("3. Time Filters")
-        
-        # FIX: Using df_base inside the conditional block
-        min_year = int(df_base[DATE_COLUMN].dt.year.min())
-        max_year = int(df_base[DATE_COLUMN].dt.year.max())
-        all_years = list(range(min_year, max_year + 1))
         
         default_start = min_year
         default_end = max_year
