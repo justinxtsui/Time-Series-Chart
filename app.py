@@ -561,6 +561,7 @@ with st.sidebar:
             start_year = st.selectbox(
                 "Start Year",
                 options=all_years,
+                # Safely determine index
                 index=all_years.index(current_start) if current_start in all_years else 0,
                 key='start_year_selector',
                 help="First year of data to include."
@@ -570,6 +571,7 @@ with st.sidebar:
             end_year = st.selectbox(
                 "End Year",
                 options=all_years,
+                # Safely determine index
                 index=all_years.index(current_end) if current_end in all_years else len(all_years) - 1,
                 key='end_year_selector',
                 help="Last year of data to include."
