@@ -24,8 +24,9 @@ YELLOW = '#FFB914'
 
 # Mapping palette for categorical data (Bars)
 CATEGORY_COLORS = [PURPLE, DARK_PURPLE, LIGHT_PURPLE, BLACK_PURPLE] 
-# New Palette for Split Lines (Yellow prioritized)
-SPLIT_LINE_PALETTE = [YELLOW, PURPLE, DARK_PURPLE, LIGHT_PURPLE, BLACK_PURPLE]
+
+# Palette for Split Lines prioritizing requested hex codes
+SPLIT_LINE_PALETTE = [PURPLE, DARK_PURPLE, BLACK_PURPLE, YELLOW]
 
 PREDEFINED_COLORS = {
     'Purple': PURPLE,
@@ -134,15 +135,22 @@ def load_data(uploaded_file):
     return data, None, original_value_column
 
 @st.cache_data
-def apply_filter(df, filter_config):
-    if not filter_config['enabled'] or filter_config['column'] == 'None':
+def apply_filter(df, filter_configs):
+    """Applies multiple dynamic filters to the DataFrame."""
+    if not filter_configs:
         return df
-    col = filter_config['column']
-    values = filter_config['values']
-    is_include = filter_config['include']
-    if values:
-        return df[df[col].isin(values)] if is_include else df[~df[col].isin(values)]
-    return df
+    
+    temp_df = df.copy()
+    for config in filter_configs:
+        col = config['column']
+        values = config['values']
+        is_include = config['include']
+        if values:
+            if is_include:
+                temp_df = temp_df[temp_df[col].isin(values)]
+            else:
+                temp_df = temp_df[~temp_df[col].isin(values)]
+    return temp_df
 
 @st.cache_data
 def process_data(df, year_range, category_column, line_category_column='None', granularity='Yearly'):
@@ -370,22 +378,31 @@ with st.sidebar:
 
             st.header("6. Data Filter")
             if st.checkbox('Enable Filtering'):
-                f_col = st.selectbox("Filter Col", ['None'] + sorted(df_base.columns))
-                if f_col != 'None':
-                    vals = st.multiselect("Values", df_base[f_col].unique())
-                    st.session_state['filter_config'] = {'enabled': True, 'column': f_col, 'include': True, 'values': vals}
+                all_cols = sorted([c for c in df_base.columns if c not in [DATE_COLUMN, VALUE_COLUMN]])
+                selected_filter_cols = st.multiselect("Select columns to filter", all_cols)
+                
+                active_filters = []
+                for f_col in selected_filter_cols:
+                    with st.expander(f"Filter: {f_col}", expanded=True):
+                        vals = st.multiselect(f"Values for {f_col}", df_base[f_col].unique(), key=f"filter_vals_{f_col}")
+                        mode = st.radio(f"Mode for {f_col}", ["Include", "Exclude"], key=f"filter_mode_{f_col}")
+                        active_filters.append({
+                            'column': f_col,
+                            'values': vals,
+                            'include': mode == "Include"
+                        })
+                st.session_state['filter_configs'] = active_filters
             else:
-                st.session_state['filter_config'] = {'enabled': False, 'column': 'None', 'include': True, 'values': []}
+                st.session_state['filter_configs'] = []
 
             st.header("7. Download")
             st.download_button("Download PNG", st.session_state['buf_png'], "chart.png", "image/png", use_container_width=True)
-            # NEW: Adobe-compatible SVG Download
             st.download_button("Download Adobe SVG", st.session_state['buf_svg'], "chart.svg", "image/svg+xml", use_container_width=True)
         else:
             st.error(error_msg)
 
 if df_base is not None:
-    df_filtered = apply_filter(df_base, st.session_state.get('filter_config', {'enabled': False}))
+    df_filtered = apply_filter(df_base, st.session_state.get('filter_configs', []))
     final_data, err = process_data(df_filtered, st.session_state['year_range'], 
                                    st.session_state['category_column'], 
                                    st.session_state['line_category_column'],
