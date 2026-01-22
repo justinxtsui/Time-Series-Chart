@@ -14,16 +14,18 @@ VALUE_COLUMN = 'Amount raised (converted to GBP)'
 ALT_DATE_COLUMN = 'Date the participant received the grant'
 ALT_VALUE_COLUMN = 'Amount received (converted to GBP)'
 
-# --- UPDATED USER COLOR PALETTE ---
+# --- USER COLOR PALETTE ---
 PURPLE = '#6B67DA'
 DARK_PURPLE = '#38358E'
 LIGHT_PURPLE = '#BBBAF6'
 WHITE_PURPLE = '#EAEAFF'
 BLACK_PURPLE = '#211E52'
-YELLOW = '#FFB914'
+YELLOW = '#FFB914' 
 
-# Mapping palette for categorical data
+# Mapping palette for categorical data (Bars)
 CATEGORY_COLORS = [PURPLE, DARK_PURPLE, LIGHT_PURPLE, BLACK_PURPLE] 
+# New Palette for Split Lines (Yellow prioritized)
+SPLIT_LINE_PALETTE = [YELLOW, PURPLE, DARK_PURPLE, LIGHT_PURPLE, BLACK_PURPLE]
 
 PREDEFINED_COLORS = {
     'Purple': PURPLE,
@@ -34,12 +36,12 @@ PREDEFINED_COLORS = {
     'Yellow': YELLOW
 }
 
-SINGLE_BAR_COLOR = LIGHT_PURPLE
-PREDICTION_SHADE_COLOR = WHITE_PURPLE # Lightest purple for predicted background
-PREDICTION_HATCH_COLOR = BLACK_PURPLE
-LINE_COLOR = BLACK_PURPLE 
-TITLE_COLOR = BLACK_PURPLE 
-APP_TITLE_COLOR = BLACK_PURPLE
+SINGLE_BAR_COLOR = '#BBBAF6' # Original default
+PREDICTION_SHADE_COLOR = WHITE_PURPLE 
+PREDICTION_HATCH_COLOR = '#000000'
+DEFAULT_LINE_COLOR = '#000000' # Original default black
+TITLE_COLOR = '#000000'
+APP_TITLE_COLOR = '#000000'
 DEFAULT_TITLE = 'Grant Funding and Deal Count Over Time'
 
 st.set_page_config(page_title="Time Series Chart Generator", layout="wide", initial_sidebar_state="expanded")
@@ -143,15 +145,19 @@ def apply_filter(df, filter_config):
     return df
 
 @st.cache_data
-def process_data(df, year_range, category_column, line_category_column='None'):
+def process_data(df, year_range, category_column, line_category_column='None', granularity='Yearly'):
     df = df.copy()
     start_year, end_year = year_range
     chart_data = df[df[DATE_COLUMN].dt.year.between(start_year, end_year, inclusive='both')].copy()
     
     if chart_data.empty:
-        return None, "No data available for the selected year range."
+        return None, "No data available for the selected range."
     
-    chart_data['time_period'] = chart_data[DATE_COLUMN].dt.year
+    if granularity == 'Quarterly':
+        chart_data['time_period'] = chart_data[DATE_COLUMN].dt.to_period('Q').astype(str)
+        chart_data = chart_data.sort_values(DATE_COLUMN)
+    else:
+        chart_data['time_period'] = chart_data[DATE_COLUMN].dt.year
     
     if category_column != 'None':
         grouped = chart_data.groupby(['time_period', category_column]).agg({VALUE_COLUMN: 'sum'}).reset_index()
@@ -173,13 +179,17 @@ def process_data(df, year_range, category_column, line_category_column='None'):
 
 def generate_chart(final_data, category_column, show_bars, show_line, chart_title, 
                    original_value_column='raised', category_colors=None, category_order=None, 
-                   prediction_start_year=None, line_category_column='None'):
+                   prediction_start_year=None, line_category_column='None', granularity='Yearly'):
     
     chart_fig, chart_ax1 = plt.subplots(figsize=(20, 10))
     bar_width = 0.8
     x_pos = np.arange(len(final_data))
-    years = final_data['time_period'].values
-    is_predicted = (years >= prediction_start_year) if prediction_start_year is not None else np.full(len(years), False)
+    time_labels = final_data['time_period'].values
+    
+    if granularity == 'Yearly' and prediction_start_year is not None:
+        is_predicted = (time_labels.astype(int) >= prediction_start_year)
+    else:
+        is_predicted = np.full(len(time_labels), False)
 
     bar_legend_label = 'Total amount received' if original_value_column == 'received' else 'Amount raised'
     num_bars = len(final_data)
@@ -209,7 +219,7 @@ def generate_chart(final_data, category_column, show_bars, show_line, chart_titl
                     chart_ax1.bar(x_pos[i], val, bar_width, bottom=bottom[i], color=bar_color, 
                                   hatch=h_style, edgecolor=e_color, linewidth=0)
                     
-                    text_color = '#FFFFFF' if is_dark_color(bar_color) else BLACK_PURPLE
+                    text_color = '#FFFFFF' if is_dark_color(bar_color) else '#000000'
                     y_text = (bottom[i] + vertical_offset) if idx == 0 else (bottom[i] + val / 2)
                     chart_ax1.text(x_pos[i], y_text, format_currency(val), ha='center', 
                                    va='bottom' if idx == 0 else 'center', fontsize=DYNAMIC_FONT_SIZE, 
@@ -225,10 +235,10 @@ def generate_chart(final_data, category_column, show_bars, show_line, chart_titl
                               edgecolor=PREDICTION_HATCH_COLOR if is_predicted[i] else 'none', linewidth=0)
                 if val > 0:
                     chart_ax1.text(x_pos[i], vertical_offset, format_currency(val), ha='center', 
-                                   va='bottom', fontsize=DYNAMIC_FONT_SIZE, fontweight='bold', color=BLACK_PURPLE)
+                                   va='bottom', fontsize=DYNAMIC_FONT_SIZE, fontweight='bold', color='#000000')
 
     chart_ax1.set_xticks(x_pos)
-    chart_ax1.set_xticklabels(final_data['time_period'], fontsize=DYNAMIC_FONT_SIZE, color=BLACK_PURPLE)
+    chart_ax1.set_xticklabels(time_labels, fontsize=DYNAMIC_FONT_SIZE)
     chart_ax1.set_ylim(0, y_max * 1.1)
     chart_ax1.tick_params(axis='both', which='both', length=0, labelleft=False)
     for spine in chart_ax1.spines.values(): spine.set_visible(False)
@@ -240,7 +250,12 @@ def generate_chart(final_data, category_column, show_bars, show_line, chart_titl
         
         for idx, l_col in enumerate(line_cols):
             display_name = l_col.replace('line_split_', '') if line_category_column != 'None' else 'Number of deals'
-            l_color = category_colors.get(display_name, CATEGORY_COLORS[idx % len(CATEGORY_COLORS)]) if line_category_column != 'None' else LINE_COLOR
+            
+            # Use original black for single line, use NEW PALETTE for split line
+            if line_category_column != 'None':
+                l_color = SPLIT_LINE_PALETTE[idx % len(SPLIT_LINE_PALETTE)]
+            else:
+                l_color = DEFAULT_LINE_COLOR
             
             y_vals = final_data[l_col].values
             
@@ -281,10 +296,10 @@ def generate_chart(final_data, category_column, show_bars, show_line, chart_titl
         if line_category_column != 'None':
             for idx, l_col in enumerate(line_cols):
                 display_name = l_col.replace('line_split_', '')
-                l_c = category_colors.get(display_name, CATEGORY_COLORS[idx % len(CATEGORY_COLORS)])
+                l_c = SPLIT_LINE_PALETTE[idx % len(SPLIT_LINE_PALETTE)]
                 legend_elements.append(Line2D([0], [0], color=l_c, marker='o', label=f"{display_name} (Deals)"))
         else:
-            legend_elements.append(Line2D([0], [0], color=LINE_COLOR, marker='o', label='Number of deals'))
+            legend_elements.append(Line2D([0], [0], color=DEFAULT_LINE_COLOR, marker='o', label='Number of deals'))
 
     chart_ax1.legend(handles=legend_elements, loc='upper left', frameon=False, prop={'size': 14}, ncol=2)
     plt.title(chart_title, fontsize=18, fontweight='bold', pad=20, color=TITLE_COLOR)
@@ -294,14 +309,15 @@ def generate_chart(final_data, category_column, show_bars, show_line, chart_titl
 # --- STREAMLIT APP LAYOUT ---
 st.markdown(f'<h1 style="color:{APP_TITLE_COLOR};">Time Series Chart Generator</h1>', unsafe_allow_html=True)
 st.markdown(f"""<div style="background: {WHITE_PURPLE}; padding: 20px; border-radius: 10px; border-left: 5px solid {YELLOW}; margin: 15px 0;">
-    <p style="margin: 0 0 10px 0; font-size: 16px; color: {BLACK_PURPLE};"><strong>Turn any fundraising or grant export into a time series chart – JT</strong></p>
+    <p style="margin: 0 0 10px 0; font-size: 16px; color: #000;"><strong>Turn any fundraising or grant export into a time series chart – JT</strong></p>
     <a href="https://platform.beauhurst.com/search/advancedsearch/" target="_blank" style="display: inline-block; background: #fff; padding: 10px 16px; border-radius: 6px; border: 1px solid #ddd; color: {PURPLE}; font-weight: 600; text-decoration: none; font-size: 14px;">🔗 Beauhurst Advanced Search</a>
     </div>""", unsafe_allow_html=True)
 
 if 'buf_png' not in st.session_state:
     st.session_state.update({'year_range': (1900, 2100), 'category_column': 'None', 'line_category_column': 'None',
                              'show_bars': True, 'show_line': True, 'chart_title': DEFAULT_TITLE,
-                             'buf_png': BytesIO(), 'buf_svg': BytesIO(), 'prediction_start_year': None})
+                             'buf_png': BytesIO(), 'buf_svg': BytesIO(), 'prediction_start_year': None,
+                             'granularity': 'Yearly'})
 
 with st.sidebar:
     st.header("1. Data Source")
@@ -319,9 +335,10 @@ with st.sidebar:
             st.session_state['chart_title'] = st.text_input("Title", value=st.session_state['chart_title'])
             
             st.header("3. Time Filters")
+            st.session_state['granularity'] = st.radio("Time Granularity", ['Yearly', 'Quarterly'], index=0 if st.session_state['granularity']=='Yearly' else 1)
             c1, c2 = st.columns(2)
-            start_year = c1.selectbox("Start", all_years, index=0)
-            end_year = c2.selectbox("End", all_years, index=len(all_years)-1)
+            start_year = c1.selectbox("Start Year", all_years, index=0)
+            end_year = c2.selectbox("End Year", all_years, index=len(all_years)-1)
             st.session_state['year_range'] = (start_year, end_year)
             
             st.header("4. Visual Elements")
@@ -332,11 +349,12 @@ with st.sidebar:
                 line_cols = ['None'] + sorted([c for c in df_base.columns if c not in [DATE_COLUMN, VALUE_COLUMN]])
                 st.session_state['line_category_column'] = st.selectbox("Split line by category", line_cols, index=0)
             
-            st.subheader("Prediction Visuals")
-            if st.checkbox("Enable prediction"):
-                pred_years = ['None'] + list(range(start_year, end_year + 1))
-                sel_pred = st.selectbox("Prediction Start", pred_years)
-                st.session_state['prediction_start_year'] = int(sel_pred) if sel_pred != 'None' else None
+            if st.session_state['granularity'] == 'Yearly':
+                st.subheader("Prediction Visuals")
+                if st.checkbox("Enable prediction"):
+                    pred_years = ['None'] + list(range(start_year, end_year + 1))
+                    sel_pred = st.selectbox("Prediction Start Year", pred_years)
+                    st.session_state['prediction_start_year'] = int(sel_pred) if sel_pred != 'None' else None
 
             st.header("5. Stacked Bar (Optional)")
             if st.checkbox('Enable Stacked Bar', value=False):
@@ -369,7 +387,8 @@ if df_base is not None:
     df_filtered = apply_filter(df_base, st.session_state.get('filter_config', {'enabled': False}))
     final_data, err = process_data(df_filtered, st.session_state['year_range'], 
                                    st.session_state['category_column'], 
-                                   st.session_state['line_category_column'])
+                                   st.session_state['line_category_column'],
+                                   st.session_state['granularity'])
     
     if final_data is not None:
         fig = generate_chart(final_data, st.session_state['category_column'], 
@@ -378,7 +397,8 @@ if df_base is not None:
                              st.session_state.get('category_colors', {}), 
                              st.session_state.get('category_order', {}),
                              st.session_state['prediction_start_year'],
-                             st.session_state['line_category_column'])
+                             st.session_state['line_category_column'],
+                             st.session_state['granularity'])
         
         st.pyplot(fig, use_container_width=True)
         
