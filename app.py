@@ -136,10 +136,8 @@ def load_data(uploaded_file):
 
 @st.cache_data
 def apply_filter(df, filter_configs):
-    """Applies multiple dynamic filters to the DataFrame."""
     if not filter_configs:
         return df
-    
     temp_df = df.copy()
     for config in filter_configs:
         col = config['column']
@@ -153,7 +151,7 @@ def apply_filter(df, filter_configs):
     return temp_df
 
 @st.cache_data
-def process_data(df, year_range, category_column, line_category_column='None', granularity='Yearly'):
+def process_data(df, year_range, category_column, line_category_column='None', granularity='Yearly', line_mode='Count'):
     df = df.copy()
     start_year, end_year = year_range
     chart_data = df[df[DATE_COLUMN].dt.year.between(start_year, end_year, inclusive='both')].copy()
@@ -167,27 +165,39 @@ def process_data(df, year_range, category_column, line_category_column='None', g
     else:
         chart_data['time_period'] = chart_data[DATE_COLUMN].dt.year
     
+    # Process Bar Data
     if category_column != 'None':
         grouped = chart_data.groupby(['time_period', category_column]).agg({VALUE_COLUMN: 'sum'}).reset_index()
         final_data = grouped.pivot(index='time_period', columns=category_column, values=VALUE_COLUMN).fillna(0).reset_index()
     else:
         final_data = chart_data.groupby('time_period').agg({VALUE_COLUMN: 'sum'}).reset_index()
 
+    # Process Line Data based on mode (Count or Value)
+    agg_func = 'size' if line_mode == 'Count' else 'sum'
+    val_col = VALUE_COLUMN if line_mode == 'Value' else None
+
     if line_category_column != 'None':
-        line_grouped = chart_data.groupby(['time_period', line_category_column]).size().reset_index(name='count')
-        line_pivot = line_grouped.pivot(index='time_period', columns=line_category_column, values='count').fillna(0)
+        if line_mode == 'Count':
+            line_grouped = chart_data.groupby(['time_period', line_category_column]).size().reset_index(name='metric')
+        else:
+            line_grouped = chart_data.groupby(['time_period', line_category_column])[VALUE_COLUMN].sum().reset_index(name='metric')
+            
+        line_pivot = line_grouped.pivot(index='time_period', columns=line_category_column, values='metric').fillna(0)
         line_pivot.columns = [f"line_split_{c}" for c in line_pivot.columns]
         final_data = final_data.merge(line_pivot, on='time_period', how='left').fillna(0)
     else:
-        row_counts = chart_data.groupby('time_period').size().reset_index(name='row_count')
-        final_data = final_data.merge(row_counts, on='time_period', how='left').fillna(0)
+        if line_mode == 'Count':
+            row_metrics = chart_data.groupby('time_period').size().reset_index(name='line_metric')
+        else:
+            row_metrics = chart_data.groupby('time_period')[VALUE_COLUMN].sum().reset_index(name='line_metric')
+        final_data = final_data.merge(row_metrics, on='time_period', how='left').fillna(0)
     
     return final_data, None
 
 
 def generate_chart(final_data, category_column, show_bars, show_line, chart_title, 
                    original_value_column='raised', category_colors=None, category_order=None, 
-                   prediction_start_year=None, line_category_column='None', granularity='Yearly'):
+                   prediction_start_year=None, line_category_column='None', granularity='Yearly', line_mode='Count'):
     
     chart_fig, chart_ax1 = plt.subplots(figsize=(20, 10))
     bar_width = 0.8
@@ -205,7 +215,7 @@ def generate_chart(final_data, category_column, show_bars, show_line, chart_titl
 
     category_cols = []
     if category_column != 'None':
-        category_cols = [col for col in final_data.columns if not str(col).startswith('line_split_') and col not in ['time_period', 'row_count']]
+        category_cols = [col for col in final_data.columns if not str(col).startswith('line_split_') and col not in ['time_period', 'line_metric']]
         if category_order:
             category_cols.sort(key=lambda x: category_order.get(x, 999))
 
@@ -223,27 +233,19 @@ def generate_chart(final_data, category_column, show_bars, show_line, chart_titl
                     bar_color = PREDICTION_SHADE_COLOR if is_predicted[i] else color
                     h_style = 'xx' if is_predicted[i] else None
                     e_color = PREDICTION_HATCH_COLOR if is_predicted[i] else 'none'
-                    
-                    chart_ax1.bar(x_pos[i], val, bar_width, bottom=bottom[i], color=bar_color, 
-                                  hatch=h_style, edgecolor=e_color, linewidth=0)
-                    
+                    chart_ax1.bar(x_pos[i], val, bar_width, bottom=bottom[i], color=bar_color, hatch=h_style, edgecolor=e_color, linewidth=0)
                     text_color = '#FFFFFF' if is_dark_color(bar_color) else '#000000'
                     y_text = (bottom[i] + vertical_offset) if idx == 0 else (bottom[i] + val / 2)
-                    chart_ax1.text(x_pos[i], y_text, format_currency(val), ha='center', 
-                                   va='bottom' if idx == 0 else 'center', fontsize=DYNAMIC_FONT_SIZE, 
-                                   fontweight='bold', color=text_color)
+                    chart_ax1.text(x_pos[i], y_text, format_currency(val), ha='center', va='bottom' if idx == 0 else 'center', fontsize=DYNAMIC_FONT_SIZE, fontweight='bold', color=text_color)
                 bottom[i] += val
     else:
         if show_bars:
             for i in range(len(final_data)):
                 val = final_data[VALUE_COLUMN].iloc[i]
                 bar_color = PREDICTION_SHADE_COLOR if is_predicted[i] else SINGLE_BAR_COLOR
-                chart_ax1.bar(x_pos[i], val, bar_width, color=bar_color, 
-                              hatch='xx' if is_predicted[i] else None, 
-                              edgecolor=PREDICTION_HATCH_COLOR if is_predicted[i] else 'none', linewidth=0)
+                chart_ax1.bar(x_pos[i], val, bar_width, color=bar_color, hatch='xx' if is_predicted[i] else None, edgecolor=PREDICTION_HATCH_COLOR if is_predicted[i] else 'none', linewidth=0)
                 if val > 0:
-                    chart_ax1.text(x_pos[i], vertical_offset, format_currency(val), ha='center', 
-                                   va='bottom', fontsize=DYNAMIC_FONT_SIZE, fontweight='bold', color='#000000')
+                    chart_ax1.text(x_pos[i], vertical_offset, format_currency(val), ha='center', va='bottom', fontsize=DYNAMIC_FONT_SIZE, fontweight='bold', color='#000000')
 
     chart_ax1.set_xticks(x_pos)
     chart_ax1.set_xticklabels(time_labels, fontsize=DYNAMIC_FONT_SIZE)
@@ -254,37 +256,28 @@ def generate_chart(final_data, category_column, show_bars, show_line, chart_titl
     # --- LINE CHART ---
     if show_line:
         chart_ax2 = chart_ax1.twinx()
-        line_cols = [col for col in final_data.columns if col.startswith('line_split_')] if line_category_column != 'None' else ['row_count']
+        line_cols = [col for col in final_data.columns if col.startswith('line_split_')] if line_category_column != 'None' else ['line_metric']
         
         for idx, l_col in enumerate(line_cols):
-            display_name = l_col.replace('line_split_', '') if line_category_column != 'None' else 'Number of deals'
-            
-            if line_category_column != 'None':
-                l_color = SPLIT_LINE_PALETTE[idx % len(SPLIT_LINE_PALETTE)]
-            else:
-                l_color = DEFAULT_LINE_COLOR
-            
+            display_name = l_col.replace('line_split_', '') if line_category_column != 'None' else ('Number of deals' if line_mode == 'Count' else bar_legend_label)
+            l_color = SPLIT_LINE_PALETTE[idx % len(SPLIT_LINE_PALETTE)] if line_category_column != 'None' else DEFAULT_LINE_COLOR
             y_vals = final_data[l_col].values
             
             actual_mask = ~is_predicted
             if any(actual_mask):
-                chart_ax2.plot(x_pos[actual_mask], y_vals[actual_mask], color=l_color, marker='o', 
-                               linestyle='-', linewidth=2.5, markersize=8, label=display_name)
+                chart_ax2.plot(x_pos[actual_mask], y_vals[actual_mask], color=l_color, marker='o', linestyle='-', linewidth=2.5, markersize=8, label=display_name)
             
             if any(is_predicted):
                 p_idx = np.where(is_predicted)[0]
                 a_idx = np.where(~is_predicted)[0]
-                if len(a_idx) > 0:
-                    conn_x = np.concatenate(([x_pos[a_idx[-1]]], x_pos[p_idx]))
-                    conn_y = np.concatenate(([y_vals[a_idx[-1]]], y_vals[p_idx]))
-                else:
-                    conn_x, conn_y = x_pos[p_idx], y_vals[p_idx]
+                conn_x = np.concatenate(([x_pos[a_idx[-1]]], x_pos[p_idx])) if len(a_idx) > 0 else x_pos[p_idx]
+                conn_y = np.concatenate(([y_vals[a_idx[-1]]], y_vals[p_idx])) if len(a_idx) > 0 else y_vals[p_idx]
                 chart_ax2.plot(conn_x, conn_y, color=l_color, marker='o', linestyle='--', linewidth=2.5, markersize=8)
 
             y_range = y_vals.max() * 0.05 if y_vals.max() > 0 else 1
             for i, y in enumerate(y_vals):
-                chart_ax2.text(x_pos[i], y + y_range, str(int(y)), ha='center', va='bottom', 
-                               fontsize=DYNAMIC_FONT_SIZE, color=l_color, fontweight='bold')
+                label_text = str(int(y)) if line_mode == 'Count' else format_currency(y)
+                chart_ax2.text(x_pos[i], y + y_range, label_text, ha='center', va='bottom', fontsize=DYNAMIC_FONT_SIZE, color=l_color, fontweight='bold')
 
         chart_ax2.set_ylim(0, final_data[line_cols].values.max() * 1.5 if final_data[line_cols].values.max() > 0 else 10)
         chart_ax2.axis('off')
@@ -304,9 +297,10 @@ def generate_chart(final_data, category_column, show_bars, show_line, chart_titl
             for idx, l_col in enumerate(line_cols):
                 display_name = l_col.replace('line_split_', '')
                 l_c = SPLIT_LINE_PALETTE[idx % len(SPLIT_LINE_PALETTE)]
-                legend_elements.append(Line2D([0], [0], color=l_c, marker='o', label=f"{display_name} (Deals)"))
+                legend_elements.append(Line2D([0], [0], color=l_c, marker='o', label=f"{display_name} ({'Deals' if line_mode == 'Count' else 'Raised'})"))
         else:
-            legend_elements.append(Line2D([0], [0], color=DEFAULT_LINE_COLOR, marker='o', label='Number of deals'))
+            l_label = 'Number of deals' if line_mode == 'Count' else bar_legend_label
+            legend_elements.append(Line2D([0], [0], color=DEFAULT_LINE_COLOR, marker='o', label=l_label))
 
     chart_ax1.legend(handles=legend_elements, loc='upper left', frameon=False, prop={'size': 14}, ncol=2)
     plt.title(chart_title, fontsize=18, fontweight='bold', pad=20, color=TITLE_COLOR)
@@ -317,14 +311,14 @@ def generate_chart(final_data, category_column, show_bars, show_line, chart_titl
 st.markdown(f'<h1 style="color:{APP_TITLE_COLOR};">Time Series Chart Generator</h1>', unsafe_allow_html=True)
 st.markdown(f"""<div style="background: {WHITE_PURPLE}; padding: 20px; border-radius: 10px; border-left: 5px solid {YELLOW}; margin: 15px 0;">
     <p style="margin: 0 0 10px 0; font-size: 16px; color: #000;"><strong>Turn any fundraising or grant export into a time series chart – JT</strong></p>
-    <a href="https://platform.beauhurst.com/search/advancedsearch/" target="_blank" style="display: inline-block; background: #fff; padding: 10px 16px; border-radius: 6px; border: 1px solid #ddd; color: {PURPLE}; font-weight: 600; text-decoration: none; font-size: 14px;">🔗 Beauhurst Advanced Search</a>
+    <a href="https://platform.beauhurst.com/search/advancedsearch/" target="_blank" style="display: inline-block; background: #fff; padding: 10px 166px; border-radius: 6px; border: 1px solid #ddd; color: {PURPLE}; font-weight: 600; text-decoration: none; font-size: 14px;">🔗 Beauhurst Advanced Search</a>
     </div>""", unsafe_allow_html=True)
 
 if 'buf_png' not in st.session_state:
     st.session_state.update({'year_range': (1900, 2100), 'category_column': 'None', 'line_category_column': 'None',
                              'show_bars': True, 'show_line': True, 'chart_title': DEFAULT_TITLE,
                              'buf_png': BytesIO(), 'buf_svg': BytesIO(), 'prediction_start_year': None,
-                             'granularity': 'Yearly'})
+                             'granularity': 'Yearly', 'line_mode': 'Count'})
 
 with st.sidebar:
     st.header("1. Data Source")
@@ -342,7 +336,7 @@ with st.sidebar:
             st.session_state['chart_title'] = st.text_input("Title", value=st.session_state['chart_title'])
             
             st.header("3. Time Filters")
-            st.session_state['granularity'] = st.radio("Time Granularity", ['Yearly', 'Quarterly'], index=0 if st.session_state['granularity']=='Yearly' else 1)
+            st.session_state['granularity'] = st.radio("Time Granularity", ['Yearly', 'Quarterly'])
             c1, c2 = st.columns(2)
             start_year = c1.selectbox("Start Year", all_years, index=0)
             end_year = c2.selectbox("End Year", all_years, index=len(all_years)-1)
@@ -350,9 +344,10 @@ with st.sidebar:
             
             st.header("4. Visual Elements")
             st.session_state['show_bars'] = st.checkbox("Show value bars", value=True)
-            st.session_state['show_line'] = st.checkbox("Show deal count line", value=True)
+            st.session_state['show_line'] = st.checkbox("Show line chart", value=True)
             
             if st.session_state['show_line']:
+                st.session_state['line_mode'] = st.radio("Line Metric", ['Count', 'Value'], help="Count = Number of deals, Value = Amount raised")
                 line_cols = ['None'] + sorted([c for c in df_base.columns if c not in [DATE_COLUMN, VALUE_COLUMN]])
                 st.session_state['line_category_column'] = st.selectbox("Split line by category", line_cols, index=0)
             
@@ -380,17 +375,12 @@ with st.sidebar:
             if st.checkbox('Enable Filtering'):
                 all_cols = sorted([c for c in df_base.columns if c not in [DATE_COLUMN, VALUE_COLUMN]])
                 selected_filter_cols = st.multiselect("Select columns to filter", all_cols)
-                
                 active_filters = []
                 for f_col in selected_filter_cols:
                     with st.expander(f"Filter: {f_col}", expanded=True):
                         vals = st.multiselect(f"Values for {f_col}", df_base[f_col].unique(), key=f"filter_vals_{f_col}")
                         mode = st.radio(f"Mode for {f_col}", ["Include", "Exclude"], key=f"filter_mode_{f_col}")
-                        active_filters.append({
-                            'column': f_col,
-                            'values': vals,
-                            'include': mode == "Include"
-                        })
+                        active_filters.append({'column': f_col, 'values': vals, 'include': mode == "Include"})
                 st.session_state['filter_configs'] = active_filters
             else:
                 st.session_state['filter_configs'] = []
@@ -403,29 +393,19 @@ with st.sidebar:
 
 if df_base is not None:
     df_filtered = apply_filter(df_base, st.session_state.get('filter_configs', []))
-    final_data, err = process_data(df_filtered, st.session_state['year_range'], 
-                                   st.session_state['category_column'], 
-                                   st.session_state['line_category_column'],
-                                   st.session_state['granularity'])
+    final_data, err = process_data(df_filtered, st.session_state['year_range'], st.session_state['category_column'], 
+                                   st.session_state['line_category_column'], st.session_state['granularity'], st.session_state['line_mode'])
     
     if final_data is not None:
-        fig = generate_chart(final_data, st.session_state['category_column'], 
-                             st.session_state['show_bars'], st.session_state['show_line'], 
-                             st.session_state['chart_title'], st.session_state['original_value_column'],
-                             st.session_state.get('category_colors', {}), 
-                             st.session_state.get('category_order', {}),
-                             st.session_state['prediction_start_year'],
-                             st.session_state['line_category_column'],
-                             st.session_state['granularity'])
+        fig = generate_chart(final_data, st.session_state['category_column'], st.session_state['show_bars'], st.session_state['show_line'], 
+                             st.session_state['chart_title'], st.session_state['original_value_column'], st.session_state.get('category_colors', {}), 
+                             st.session_state.get('category_order', {}), st.session_state['prediction_start_year'], st.session_state['line_category_column'], 
+                             st.session_state['granularity'], st.session_state['line_mode'])
         
         st.pyplot(fig, use_container_width=True)
-        
-        buf_p = BytesIO()
+        buf_p, buf_s = BytesIO(), BytesIO()
         fig.savefig(buf_p, format='png', dpi=300, bbox_inches='tight')
-        st.session_state['buf_png'] = buf_p
-
-        buf_s = BytesIO()
         fig.savefig(buf_s, format='svg', bbox_inches='tight')
-        st.session_state['buf_svg'] = buf_s
+        st.session_state['buf_png'], st.session_state['buf_svg'] = buf_p, buf_s
 else:
     st.info("⬆️ Please upload your data file in the sidebar to begin.")
