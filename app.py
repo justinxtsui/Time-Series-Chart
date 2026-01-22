@@ -36,10 +36,10 @@ PREDEFINED_COLORS = {
     'Yellow': YELLOW
 }
 
-SINGLE_BAR_COLOR = '#BBBAF6' # Original default
+SINGLE_BAR_COLOR = '#BBBAF6'
 PREDICTION_SHADE_COLOR = WHITE_PURPLE 
 PREDICTION_HATCH_COLOR = '#000000'
-DEFAULT_LINE_COLOR = '#000000' # Original default black
+DEFAULT_LINE_COLOR = '#000000' 
 TITLE_COLOR = '#000000'
 APP_TITLE_COLOR = '#000000'
 DEFAULT_TITLE = 'Grant Funding and Deal Count Over Time'
@@ -251,7 +251,6 @@ def generate_chart(final_data, category_column, show_bars, show_line, chart_titl
         for idx, l_col in enumerate(line_cols):
             display_name = l_col.replace('line_split_', '') if line_category_column != 'None' else 'Number of deals'
             
-            # Use original black for single line, use NEW PALETTE for split line
             if line_category_column != 'None':
                 l_color = SPLIT_LINE_PALETTE[idx % len(SPLIT_LINE_PALETTE)]
             else:
@@ -380,6 +379,8 @@ with st.sidebar:
 
             st.header("7. Download")
             st.download_button("Download PNG", st.session_state['buf_png'], "chart.png", "image/png", use_container_width=True)
+            # NEW: Adobe-compatible SVG Download
+            st.download_button("Download Adobe SVG", st.session_state['buf_svg'], "chart.svg", "image/svg+xml", use_container_width=True)
         else:
             st.error(error_msg)
 
@@ -405,5 +406,9 @@ if df_base is not None:
         buf_p = BytesIO()
         fig.savefig(buf_p, format='png', dpi=300, bbox_inches='tight')
         st.session_state['buf_png'] = buf_p
+
+        buf_s = BytesIO()
+        fig.savefig(buf_s, format='svg', bbox_inches='tight')
+        st.session_state['buf_svg'] = buf_s
 else:
     st.info("⬆️ Please upload your data file in the sidebar to begin.")
