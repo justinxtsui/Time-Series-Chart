@@ -7,6 +7,9 @@ from matplotlib.lines import Line2D
 from matplotlib.colors import to_rgb
 from streamlit_sortables import sort_items
 
+# --- THE FIX FOR EDITABLE SVG TEXT ---
+plt.rcParams['svg.fonttype'] = 'none' 
+
 # --- CONFIGURATION ---
 DATE_COLUMN = 'Deal date'
 VALUE_COLUMN = 'Amount raised (converted to GBP)'
@@ -55,7 +58,6 @@ def is_dark_color(hex_color):
 
 @st.cache_data
 def load_data(uploaded_file, sheet_name=None):
-    # --- UPDATED: Sheet selection logic ---
     if uploaded_file.name.endswith('.csv'):
         data = pd.read_csv(uploaded_file)
     else:
@@ -63,14 +65,12 @@ def load_data(uploaded_file, sheet_name=None):
     
     data.columns = data.columns.str.strip()
     
-    # Identify Date and Value columns
     for alt in ALT_DATE_COLUMN:
         if alt in data.columns: data.rename(columns={alt: DATE_COLUMN}, inplace=True); break
     for alt in ALT_VALUE_COLUMN:
         if alt in data.columns: data.rename(columns={alt: VALUE_COLUMN}, inplace=True); break
 
     try:
-        # THE FIX FOR 1970 ISSUE: string conversion before parsing
         data[DATE_COLUMN] = pd.to_datetime(data[DATE_COLUMN].astype(str), format='mixed', errors='coerce')
         for col in data.columns:
             if col not in [DATE_COLUMN, VALUE_COLUMN]: data[col] = data[col].astype(str).str.strip()
@@ -211,7 +211,9 @@ if file and 'df_base' in locals() and df_base is not None:
         with col_chart:
             fig = generate_chart(final, stack_col, show_bars, show_line, title, colors, order, pred_y, line_cat, granularity, line_mode)
             st.pyplot(fig)
-        fig.savefig(buf_p, format='png', dpi=300, bbox_inches='tight'); fig.savefig(buf_s, format='svg', bbox_inches='tight')
+        fig.savefig(buf_p, format='png', dpi=300, bbox_inches='tight')
+        # This will now save with editable text blocks instead of outlines
+        fig.savefig(buf_s, format='svg', bbox_inches='tight')
         st.sidebar.download_button("Download PNG", buf_p.getvalue(), "chart.png", use_container_width=True)
         st.sidebar.download_button("Download Adobe SVG", buf_s.getvalue(), "chart.svg", use_container_width=True)
 else: st.info("⬆️ Please upload your data file in the sidebar to begin.")
