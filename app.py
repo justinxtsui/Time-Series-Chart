@@ -69,7 +69,7 @@ def apply_filter(df, filter_configs):
 
 def process_data(df, date_col, value_col, year_range, cat_col, line_cat_col, granularity, line_mode):
     df = df.copy()
-    # Ensure Date Column is datetime
+    # Pre-process numeric and date formats
     df[date_col] = pd.to_datetime(df[date_col].astype(str), format='mixed', errors='coerce')
     df.dropna(subset=[date_col], inplace=True)
     df[value_col] = pd.to_numeric(df[value_col], errors='coerce').fillna(0)
@@ -140,7 +140,7 @@ def generate_chart(final_data, value_col, cat_col, show_bars, show_line, title, 
     handles = []
     if show_bars:
         if cat_col != 'None': handles += [Line2D([0], [0], marker='s', color='w', markerfacecolor=colors.get(c, PURPLE), markersize=12, label=c) for c in bar_cols]
-        else: handles.append(Line2D([0], [0], marker='s', color='w', markerfacecolor=SINGLE_BAR_COLOR, markersize=12, label='Amount raised'))
+        else: handles.append(Line2D([0], [0], marker='s', color='w', markerfacecolor=SINGLE_BAR_COLOR, markersize=12, label='Value'))
     if show_line:
         if line_cat_col != 'None': handles += [Line2D([0], [0], color=SPLIT_LINE_PALETTE[i % len(SPLIT_LINE_PALETTE)], marker='o', label=f"{c.replace('line_split_', '')} ({line_mode})") for i, c in enumerate(line_cols)]
         else: handles.append(Line2D([0], [0], color=DEFAULT_LINE_COLOR, marker='o', label=f"{'Deals' if line_mode == 'Count' else 'Value'}"))
@@ -163,7 +163,6 @@ with st.sidebar:
         df_base = load_data(file, sheet_name=sheet)
         
         st.header("2. Column Mapping")
-        # Let users pick Date and Value columns
         date_col = st.selectbox("Select Date Column (X-Axis)", df_base.columns)
         value_col = st.selectbox("Select Value Column (Y-Axis)", df_base.columns)
         
@@ -173,7 +172,7 @@ with st.sidebar:
         st.header("4. Time Filters")
         granularity = st.radio("Granularity", ['Yearly', 'Quarterly'])
         
-        # Temporary conversion to get years for slider
+        # Temp convert for year selection
         temp_dates = pd.to_datetime(df_base[date_col].astype(str), format='mixed', errors='coerce').dropna()
         min_y, max_y = int(temp_dates.dt.year.min()), int(temp_dates.dt.year.max())
         s_y = st.selectbox("Start Year", list(range(min_y, max_y + 1)), index=0)
@@ -193,10 +192,13 @@ with st.sidebar:
         stack_col, colors, order = ('None', {}, {})
         if st.checkbox('Enable Stacked Bar'):
             stack_col = st.selectbox("Column", [c for c in df_base.columns if c not in [date_col, value_col]])
-            unique_cats = sorted(df_base[stack_col].unique())
-            sorted_cats = sort_items(unique_cats, key='sort_bars')
-            colors = {c: st.selectbox(f"Color: {c}", list(PREDEFINED_COLORS.values()), index=i%6) for i, c in enumerate(sorted_cats)}
-            order = {c: i for i,c in enumerate(sorted_cats)}
+            unique_cats = sorted([str(c) for c in df_base[stack_col].unique() if pd.notna(c)])
+            if unique_cats:
+                # Use a container to prevent sort_items from leaking to the main page
+                with st.sidebar:
+                    sorted_cats = sort_items(unique_cats, key='sort_bars')
+                colors = {c: st.selectbox(f"Color: {c}", list(PREDEFINED_COLORS.values()), index=i%6) for i, c in enumerate(sorted_cats)}
+                order = {c: i for i,c in enumerate(sorted_cats)}
             
         st.header("7. Data Filter")
         configs = []
