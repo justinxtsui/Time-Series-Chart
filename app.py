@@ -69,7 +69,6 @@ def apply_filter(df, filter_configs):
 
 def process_data(df, date_col, value_col, year_range, cat_col, line_cat_col, granularity, line_mode):
     df = df.copy()
-    # Pre-process numeric and date formats
     df[date_col] = pd.to_datetime(df[date_col].astype(str), format='mixed', errors='coerce')
     df.dropna(subset=[date_col], inplace=True)
     df[value_col] = pd.to_numeric(df[value_col], errors='coerce').fillna(0)
@@ -172,12 +171,16 @@ with st.sidebar:
         st.header("4. Time Filters")
         granularity = st.radio("Granularity", ['Yearly', 'Quarterly'])
         
-        # Temp convert for year selection
-        temp_dates = pd.to_datetime(df_base[date_col].astype(str), format='mixed', errors='coerce').dropna()
-        min_y, max_y = int(temp_dates.dt.year.min()), int(temp_dates.dt.year.max())
-        s_y = st.selectbox("Start Year", list(range(min_y, max_y + 1)), index=0)
-        e_y = st.selectbox("End Year", list(range(min_y, max_y + 1)), index=(max_y-min_y))
-        
+        # --- ERROR HANDLING FIX ---
+        try:
+            temp_dates = pd.to_datetime(df_base[date_col].astype(str), format='mixed', errors='coerce').dropna()
+            min_y, max_y = int(temp_dates.dt.year.min()), int(temp_dates.dt.year.max())
+            s_y = st.selectbox("Start Year", list(range(min_y, max_y + 1)), index=0)
+            e_y = st.selectbox("End Year", list(range(min_y, max_y + 1)), index=(max_y-min_y))
+        except (ValueError, TypeError):
+            st.info("Please select the data you want to show")
+            st.stop()
+
         st.header("5. Visual Elements")
         show_bars = st.checkbox("Show Bars", True)
         show_line = st.checkbox("Show Line", True)
@@ -194,7 +197,6 @@ with st.sidebar:
             stack_col = st.selectbox("Column", [c for c in df_base.columns if c not in [date_col, value_col]])
             unique_cats = sorted([str(c) for c in df_base[stack_col].unique() if pd.notna(c)])
             if unique_cats:
-                # Use a container to prevent sort_items from leaking to the main page
                 with st.sidebar:
                     sorted_cats = sort_items(unique_cats, key='sort_bars')
                 colors = {c: st.selectbox(f"Color: {c}", list(PREDEFINED_COLORS.values()), index=i%6) for i, c in enumerate(sorted_cats)}
