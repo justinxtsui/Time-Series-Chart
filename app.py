@@ -10,13 +10,7 @@ from streamlit_sortables import sort_items
 # --- THE FIX FOR EDITABLE SVG TEXT ---
 plt.rcParams['svg.fonttype'] = 'none' 
 
-# --- CONFIGURATION ---
-DATE_COLUMN = 'Deal date'
-VALUE_COLUMN = 'Amount raised (converted to GBP)'
-ALT_DATE_COLUMN = ['Date the participant received the grant', 'Deal year', 'Date']
-ALT_VALUE_COLUMN = ['Amount received (converted to GBP)', 'Average pre-money valuation (GBP)', 'Amount']
-
-# --- USER COLOR PALETTE ---
+# --- CONFIGURATION & PALETTE ---
 PURPLE, DARK_PURPLE, LIGHT_PURPLE = '#6B67DA', '#38358E', '#BBBAF6'
 WHITE_PURPLE, BLACK_PURPLE, YELLOW = '#EAEAFF', '#211E52', '#FFB914'
 
@@ -62,24 +56,8 @@ def load_data(uploaded_file, sheet_name=None):
         data = pd.read_csv(uploaded_file)
     else:
         data = pd.read_excel(uploaded_file, sheet_name=sheet_name)
-    
     data.columns = data.columns.str.strip()
-    
-    for alt in ALT_DATE_COLUMN:
-        if alt in data.columns: data.rename(columns={alt: DATE_COLUMN}, inplace=True); break
-    for alt in ALT_VALUE_COLUMN:
-        if alt in data.columns: data.rename(columns={alt: VALUE_COLUMN}, inplace=True); break
-
-    try:
-        data[DATE_COLUMN] = pd.to_datetime(data[DATE_COLUMN].astype(str), format='mixed', errors='coerce')
-        for col in data.columns:
-            if col not in [DATE_COLUMN, VALUE_COLUMN]: data[col] = data[col].astype(str).str.strip()
-        data.dropna(subset=[DATE_COLUMN], inplace=True)
-        data[VALUE_COLUMN] = pd.to_numeric(data[VALUE_COLUMN], errors='coerce').fillna(0)
-    except Exception as e: return None, f"Error: {e}"
-    
-    if data.empty: return None, "No valid rows found."
-    return data, None
+    return data
 
 def apply_filter(df, filter_configs):
     if not filter_configs: return df
@@ -89,31 +67,37 @@ def apply_filter(df, filter_configs):
         if values: temp_df = temp_df[temp_df[col].isin(values)] if include else temp_df[~temp_df[col].isin(values)]
     return temp_df
 
-def process_data(df, year_range, cat_col, line_cat_col, granularity, line_mode):
+def process_data(df, date_col, value_col, year_range, cat_col, line_cat_col, granularity, line_mode):
     df = df.copy()
-    chart_data = df[df[DATE_COLUMN].dt.year.between(year_range[0], year_range[1], inclusive='both')].copy()
+    # Ensure Date Column is datetime
+    df[date_col] = pd.to_datetime(df[date_col].astype(str), format='mixed', errors='coerce')
+    df.dropna(subset=[date_col], inplace=True)
+    df[value_col] = pd.to_numeric(df[value_col], errors='coerce').fillna(0)
+    
+    chart_data = df[df[date_col].dt.year.between(year_range[0], year_range[1], inclusive='both')].copy()
     if chart_data.empty: return None, "No data available."
     
-    chart_data['time_period'] = chart_data[DATE_COLUMN].dt.to_period('Q').astype(str) if granularity == 'Quarterly' else chart_data[DATE_COLUMN].dt.year
-    chart_data = chart_data.sort_values(DATE_COLUMN)
+    chart_data['time_period'] = chart_data[date_col].dt.to_period('Q').astype(str) if granularity == 'Quarterly' else chart_data[date_col].dt.year
+    chart_data = chart_data.sort_values(date_col)
     
     if cat_col != 'None':
-        grouped = chart_data.groupby(['time_period', cat_col]).agg({VALUE_COLUMN: 'sum'}).reset_index()
-        final_data = grouped.pivot(index='time_period', columns=cat_col, values=VALUE_COLUMN).fillna(0).reset_index()
-    else: final_data = chart_data.groupby('time_period').agg({VALUE_COLUMN: 'sum'}).reset_index()
+        grouped = chart_data.groupby(['time_period', cat_col]).agg({value_col: 'sum'}).reset_index()
+        final_data = grouped.pivot(index='time_period', columns=cat_col, values=value_col).fillna(0).reset_index()
+    else: 
+        final_data = chart_data.groupby('time_period').agg({value_col: 'sum'}).reset_index()
 
     if line_cat_col != 'None':
-        metric_col, metric_agg = (VALUE_COLUMN, 'sum') if line_mode == 'Value' else (DATE_COLUMN, 'count')
+        metric_col, metric_agg = (value_col, 'sum') if line_mode == 'Value' else (date_col, 'count')
         line_grouped = chart_data.groupby(['time_period', line_cat_col])[metric_col].agg(metric_agg).reset_index(name='metric')
         line_pivot = line_grouped.pivot(index='time_period', columns=line_cat_col, values='metric').fillna(0)
         line_pivot.columns = [f"line_split_{c}" for c in line_pivot.columns]
         final_data = final_data.merge(line_pivot, on='time_period', how='left').fillna(0)
     else:
-        metric = chart_data.groupby('time_period')[VALUE_COLUMN].sum() if line_mode == 'Value' else chart_data.groupby('time_period').size()
+        metric = chart_data.groupby('time_period')[value_col].sum() if line_mode == 'Value' else chart_data.groupby('time_period').size()
         final_data = final_data.merge(metric.reset_index(name='line_metric'), on='time_period', how='left').fillna(0)
     return final_data, None
 
-def generate_chart(final_data, cat_col, show_bars, show_line, title, colors, order, pred_y, line_cat_col, granularity, line_mode):
+def generate_chart(final_data, value_col, cat_col, show_bars, show_line, title, colors, order, pred_y, line_cat_col, granularity, line_mode):
     fig, ax1 = plt.subplots(figsize=(20, 10))
     x_pos, time_labels = np.arange(len(final_data)), final_data['time_period'].values
     is_pred = (time_labels.astype(int) >= pred_y) if granularity == 'Yearly' and pred_y else np.full(len(time_labels), False)
@@ -121,7 +105,7 @@ def generate_chart(final_data, cat_col, show_bars, show_line, title, colors, ord
     
     bar_cols = [c for c in final_data.columns if not str(c).startswith('line_split_') and c not in ['time_period', 'line_metric']]
     if order: bar_cols.sort(key=lambda x: order.get(x, 999))
-    y_max = final_data[bar_cols].sum(axis=1).max() if bar_cols else final_data[VALUE_COLUMN].max()
+    y_max = final_data[bar_cols].sum(axis=1).max() if bar_cols else final_data[value_col].max()
 
     if cat_col != 'None':
         bottom = np.zeros(len(final_data))
@@ -136,7 +120,7 @@ def generate_chart(final_data, cat_col, show_bars, show_line, title, colors, ord
                 bottom[i] += val
     elif show_bars:
         for i in range(len(final_data)):
-            val, bc = final_data[VALUE_COLUMN].iloc[i], (PREDICTION_SHADE_COLOR if is_pred[i] else SINGLE_BAR_COLOR)
+            val, bc = final_data[value_col].iloc[i], (PREDICTION_SHADE_COLOR if is_pred[i] else SINGLE_BAR_COLOR)
             ax1.bar(x_pos[i], val, 0.8, color=bc, hatch='xx' if is_pred[i] else None, edgecolor='black' if is_pred[i] else 'none', linewidth=0)
             if val > 0: ax1.text(x_pos[i], y_max*0.01, format_currency(val), ha='center', va='bottom', fontsize=font_size, fontweight='bold', color='#000000')
 
@@ -165,7 +149,7 @@ def generate_chart(final_data, cat_col, show_bars, show_line, title, colors, ord
 
 # --- APP LAYOUT ---
 st.markdown(f'<h1 style="color:{BLACK_PURPLE};">Time Series Chart Generator</h1>', unsafe_allow_html=True)
-st.markdown(f'<div style="background:{WHITE_PURPLE}; padding:20px; border-radius:10px; border-left:5px solid {YELLOW}; margin:15px 0;"><p style="margin:0; font-size:16px; color:#000;"><strong>Turn fundraising exports into time series charts – JT</strong></p><a href="https://platform.beauhurst.com/search/advancedsearch/" target="_blank" style="display:inline-block; background:#fff; padding:10px 16px; border-radius:6px; border:1px solid #ddd; color:{PURPLE}; font-weight:600; text-decoration:none; font-size:14px;">🔗 Beauhurst Advanced Search</a></div>', unsafe_allow_html=True)
+st.markdown(f'<div style="background:{WHITE_PURPLE}; padding:20px; border-radius:10px; border-left:5px solid {YELLOW}; margin:15px 0;"><p style="margin:0; font-size:16px; color:#000;"><strong>Turn fundraising exports into time series charts – JT</strong></p></div>', unsafe_allow_html=True)
 
 with st.sidebar:
     st.header("1. Data Source")
@@ -176,44 +160,69 @@ with st.sidebar:
         sheet = st.selectbox("Select Sheet", xl.sheet_names)
     
     if file:
-        df_base, err = load_data(file, sheet_name=sheet)
-        if df_base is not None:
-            st.header("2. Chart Title"); title = st.text_input("Title", DEFAULT_TITLE)
-            st.header("3. Time Filters"); granularity = st.radio("Granularity", ['Yearly', 'Quarterly'])
-            min_y, max_y = int(df_base[DATE_COLUMN].dt.year.min()), int(df_base[DATE_COLUMN].dt.year.max())
-            s_y = st.selectbox("Start Year", list(range(min_y, max_y + 1)), index=0)
-            e_y = st.selectbox("End Year", list(range(min_y, max_y + 1)), index=(max_y-min_y))
-            st.header("4. Visual Elements"); show_bars = st.checkbox("Show Bars", True); show_line = st.checkbox("Show Line", True)
-            line_mode, line_cat = ('Count', 'None')
-            if show_line:
-                line_mode = st.radio("Line Metric", ['Count', 'Value'])
-                line_cat = st.selectbox("Split Line Category", ['None'] + [c for c in df_base.columns if c not in [DATE_COLUMN, VALUE_COLUMN]])
-            pred_y = st.selectbox("Prediction Start", list(range(s_y, e_y + 1))) if granularity == 'Yearly' and st.checkbox("Enable Predictions") else None
-            st.header("5. Stacked Bar"); stack_col, colors, order = ('None', {}, {})
-            if st.checkbox('Enable Stacked Bar'):
-                stack_col = st.selectbox("Column", [c for c in df_base.columns if c not in [DATE_COLUMN, VALUE_COLUMN]])
-                unique_cats = sorted(df_base[stack_col].unique()); sorted_cats = sort_items(unique_cats, key='sort_bars')
-                colors = {c: st.selectbox(f"Color: {c}", list(PREDEFINED_COLORS.values()), index=i%6) for i, c in enumerate(sorted_cats)}; order = {c: i for i,c in enumerate(sorted_cats)}
-            st.header("6. Data Filter"); configs = []
-            if st.checkbox('Enable Filtering'):
-                sel_f = st.multiselect("Columns", sorted([c for c in df_base.columns if c not in [DATE_COLUMN, VALUE_COLUMN]]))
-                for f in sel_f:
-                    with st.expander(f"Filter: {f}", expanded=True):
-                        vals = st.multiselect(f"Values", df_base[f].unique(), key=f"f_v_{f}")
-                        configs.append({'column': f, 'values': vals, 'include': st.radio(f"Mode", ["Include", "Exclude"], key=f"f_m_{f}") == "Include"})
-            st.header("7. Download"); buf_p, buf_s = BytesIO(), BytesIO()
+        df_base = load_data(file, sheet_name=sheet)
+        
+        st.header("2. Column Mapping")
+        # Let users pick Date and Value columns
+        date_col = st.selectbox("Select Date Column (X-Axis)", df_base.columns)
+        value_col = st.selectbox("Select Value Column (Y-Axis)", df_base.columns)
+        
+        st.header("3. Chart Title")
+        title = st.text_input("Title", DEFAULT_TITLE)
+        
+        st.header("4. Time Filters")
+        granularity = st.radio("Granularity", ['Yearly', 'Quarterly'])
+        
+        # Temporary conversion to get years for slider
+        temp_dates = pd.to_datetime(df_base[date_col].astype(str), format='mixed', errors='coerce').dropna()
+        min_y, max_y = int(temp_dates.dt.year.min()), int(temp_dates.dt.year.max())
+        s_y = st.selectbox("Start Year", list(range(min_y, max_y + 1)), index=0)
+        e_y = st.selectbox("End Year", list(range(min_y, max_y + 1)), index=(max_y-min_y))
+        
+        st.header("5. Visual Elements")
+        show_bars = st.checkbox("Show Bars", True)
+        show_line = st.checkbox("Show Line", True)
+        line_mode, line_cat = ('Count', 'None')
+        if show_line:
+            line_mode = st.radio("Line Metric", ['Count', 'Value'])
+            line_cat = st.selectbox("Split Line Category", ['None'] + [c for c in df_base.columns if c not in [date_col, value_col]])
+        
+        pred_y = st.selectbox("Prediction Start", list(range(s_y, e_y + 1))) if granularity == 'Yearly' and st.checkbox("Enable Predictions") else None
+        
+        st.header("6. Stacked Bar")
+        stack_col, colors, order = ('None', {}, {})
+        if st.checkbox('Enable Stacked Bar'):
+            stack_col = st.selectbox("Column", [c for c in df_base.columns if c not in [date_col, value_col]])
+            unique_cats = sorted(df_base[stack_col].unique())
+            sorted_cats = sort_items(unique_cats, key='sort_bars')
+            colors = {c: st.selectbox(f"Color: {c}", list(PREDEFINED_COLORS.values()), index=i%6) for i, c in enumerate(sorted_cats)}
+            order = {c: i for i,c in enumerate(sorted_cats)}
+            
+        st.header("7. Data Filter")
+        configs = []
+        if st.checkbox('Enable Filtering'):
+            sel_f = st.multiselect("Columns", sorted([c for c in df_base.columns if c not in [date_col, value_col]]))
+            for f in sel_f:
+                with st.expander(f"Filter: {f}", expanded=True):
+                    vals = st.multiselect(f"Values", df_base[f].unique(), key=f"f_v_{f}")
+                    configs.append({'column': f, 'values': vals, 'include': st.radio(f"Mode", ["Include", "Exclude"], key=f"f_m_{f}") == "Include"})
+        
+        st.header("8. Download")
+        buf_p, buf_s = BytesIO(), BytesIO()
 
 if file and 'df_base' in locals() and df_base is not None:
     df_f = apply_filter(df_base, configs)
-    final, err_p = process_data(df_f, (s_y, e_y), stack_col, line_cat, granularity, line_mode)
+    final, err_p = process_data(df_f, date_col, value_col, (s_y, e_y), stack_col, line_cat, granularity, line_mode)
+    
     if final is not None:
         col_chart, _ = st.columns([4, 1])
         with col_chart:
-            fig = generate_chart(final, stack_col, show_bars, show_line, title, colors, order, pred_y, line_cat, granularity, line_mode)
+            fig = generate_chart(final, value_col, stack_col, show_bars, show_line, title, colors, order, pred_y, line_cat, granularity, line_mode)
             st.pyplot(fig)
+        
         fig.savefig(buf_p, format='png', dpi=300, bbox_inches='tight')
-        # This will now save with editable text blocks instead of outlines
         fig.savefig(buf_s, format='svg', bbox_inches='tight')
         st.sidebar.download_button("Download PNG", buf_p.getvalue(), "chart.png", use_container_width=True)
         st.sidebar.download_button("Download Adobe SVG", buf_s.getvalue(), "chart.svg", use_container_width=True)
-else: st.info("⬆️ Please upload your data file in the sidebar to begin.")
+else: 
+    st.info("⬆️ Please upload your data file in the sidebar to begin.")
