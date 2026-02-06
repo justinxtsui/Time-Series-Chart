@@ -26,6 +26,41 @@ SINGLE_BAR_COLOR, PREDICTION_SHADE_COLOR = '#BBBAF6', WHITE_PURPLE
 DEFAULT_LINE_COLOR, TITLE_COLOR, DEFAULT_TITLE = '#000000', '#000000', 'Grant Funding and Deal Count Over Time'
 
 st.set_page_config(page_title="Time Series Chart Generator", layout="wide", initial_sidebar_state="expanded")
+
+# --- CUSTOM CSS FOR BRANDING ---
+st.markdown(f"""
+    <style>
+    .app-title {{
+        font-size: 48px;
+        font-weight: 800;
+        letter-spacing: -1px;
+        color: {BLACK_PURPLE};
+        margin-bottom: 0px;
+        line-height: 1.1;
+    }}
+    .app-attribution {{
+        font-size: 24px;
+        font-weight: 600;
+        color: {BLACK_PURPLE};
+        margin-top: 0px;
+        margin-bottom: 10px;
+    }}
+    .app-subtitle {{
+        color: #000000;
+        font-size: 18px;
+        margin-bottom: 5px;
+        font-weight: normal;
+    }}
+    .bold-divider {{
+        height: 3px;
+        background-color: #e6e9ef;
+        border: none;
+        margin-top: 10px;
+        margin-bottom: 25px;
+    }}
+    </style>
+    """, unsafe_allow_html=True)
+
 plt.rcParams['font.family'] = 'sans-serif'
 plt.rcParams['font.sans-serif'] = ['Arial', 'Public Sans', 'DejaVu Sans']
 
@@ -146,10 +181,23 @@ def generate_chart(final_data, value_col, cat_col, show_bars, show_line, title, 
     if handles: ax1.legend(handles=handles, loc='upper left', frameon=False, prop={'size': 14}, ncol=2)
     plt.title(title, fontsize=22, fontweight='bold', pad=30); return fig
 
-# --- APP LAYOUT ---
-st.markdown(f'<h1 style="color:{BLACK_PURPLE};">Time Series Chart Generator</h1>', unsafe_allow_html=True)
-st.markdown(f'<div style="background:{WHITE_PURPLE}; padding:20px; border-radius:10px; border-left:5px solid {YELLOW}; margin:15px 0;"><p style="margin:0; font-size:16px; color:#000;"><strong>Turn fundraising exports into time series charts – JT</strong></p></div>', unsafe_allow_html=True)
+# --- APP HEADER AREA ---
+# 1. Branding Image
+st.image("https://github.com/justinxtsui/Index-chart-maker/blob/main/Beauhurst%20Insights%20Logo.png?raw=true", width=300) 
 
+# 2. Primary App Title
+st.markdown('<div class="app-title">Dexter ( ◡‿◡ )ᕤ</div>', unsafe_allow_html=True)
+
+# 3. Creator Attribution
+st.markdown('<div class="app-attribution">by JT @Beauhurst Insights</div>', unsafe_allow_html=True)
+
+# 4. Description Subtitle
+st.markdown('<p class="app-subtitle">Turn fundraising exports into indexed time series charts (For internal use only)</p>', unsafe_allow_html=True)
+
+# 5. The Bold Divider
+st.markdown('<hr class="bold-divider">', unsafe_allow_html=True)
+
+# --- SIDEBAR LOGIC FLOW ---
 with st.sidebar:
     st.header("1. Data Source")
     file = st.file_uploader("Upload CSV/Excel", type=['xlsx', 'xls', 'csv'])
@@ -171,7 +219,6 @@ with st.sidebar:
         st.header("4. Time Filters")
         granularity = st.radio("Granularity", ['Yearly', 'Quarterly'])
         
-        # --- ERROR HANDLING FIX ---
         try:
             temp_dates = pd.to_datetime(df_base[date_col].astype(str), format='mixed', errors='coerce').dropna()
             min_y, max_y = int(temp_dates.dt.year.min()), int(temp_dates.dt.year.max())
