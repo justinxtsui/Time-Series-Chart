@@ -286,7 +286,7 @@ with st.sidebar:
         y_axis_title = st.text_input("Y Axis Title", "Value")
 
         st.header("5. Export")
-        export_format = st.selectbox("Format", options=['PNG', 'SVG (Vectorized)'])
+        export_format = st.selectbox("Format", options=['PNG', 'SVG (Vectorised)'])
 
 # --- MAIN LOGIC & RENDERING ---
 if file:
@@ -309,4 +309,4 @@ if file:
             else:
                 st.download_button(btn_label, buf_s.getvalue(), "chart.svg", use_container_width=True)
 else: 
-    st.info("⬆️ Please upload your data file to begin.")
+    st.info(" 👈🏻 Please upload your data file to begin.")
