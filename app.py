@@ -27,9 +27,20 @@ DEFAULT_LINE_COLOR, TITLE_COLOR, DEFAULT_TITLE = '#000000', '#000000', 'Grant Fu
 
 st.set_page_config(page_title="Time Series Chart Generator", layout="wide", initial_sidebar_state="expanded")
 
-# --- CUSTOM CSS FOR BRANDING ---
+# --- CUSTOM CSS FOR SIDEBAR & BRANDING ---
 st.markdown(f"""
     <style>
+    [data-testid="stSidebar"] {{
+        background-color: #f8f9fb;
+        border-right: 1px solid #e6e9ef;
+    }}
+    [data-testid="stSidebar"] h2 {{
+        color: {DARK_PURPLE};
+        font-size: 1.2rem;
+        border-bottom: 2px solid {LIGHT_PURPLE};
+        padding-bottom: 5px;
+        margin-top: 20px;
+    }}
     .app-title {{
         font-size: 48px;
         font-weight: 800;
@@ -131,7 +142,7 @@ def process_data(df, date_col, value_col, year_range, cat_col, line_cat_col, gra
         final_data = final_data.merge(metric.reset_index(name='line_metric'), on='time_period', how='left').fillna(0)
     return final_data, None
 
-def generate_chart(final_data, value_col, cat_col, show_bars, show_line, title, colors, order, pred_y, line_cat_col, granularity, line_mode):
+def generate_chart(final_data, value_col, cat_col, show_bars, show_line, title, y_axis_title, colors, order, pred_y, line_cat_col, granularity, line_mode):
     fig, ax1 = plt.subplots(figsize=(20, 10))
     x_pos, time_labels = np.arange(len(final_data)), final_data['time_period'].values
     is_pred = (time_labels.astype(int) >= pred_y) if granularity == 'Yearly' and pred_y else np.full(len(time_labels), False)
@@ -159,6 +170,7 @@ def generate_chart(final_data, value_col, cat_col, show_bars, show_line, title, 
             if val > 0: ax1.text(x_pos[i], y_max*0.01, format_currency(val), ha='center', va='bottom', fontsize=font_size, fontweight='bold', color='#000000')
 
     ax1.set_xticks(x_pos); ax1.set_xticklabels(time_labels, fontsize=font_size); ax1.set_ylim(0, y_max * 1.15)
+    ax1.set_ylabel(y_axis_title, fontsize=16, fontweight='bold')
     ax1.tick_params(left=False, labelleft=False, length=0); [s.set_visible(False) for s in ax1.spines.values()]
 
     if show_line:
@@ -182,24 +194,16 @@ def generate_chart(final_data, value_col, cat_col, show_bars, show_line, title, 
     plt.title(title, fontsize=22, fontweight='bold', pad=30); return fig
 
 # --- APP HEADER AREA ---
-# 1. Branding Image
 st.image("https://github.com/justinxtsui/Time-Series-Chart/blob/main/Screenshot%202026-02-06%20at%2016.51.25.png?raw=true", width=250) 
-
-# 2. Primary App Title
 st.markdown('<div class="app-title">Line-us (˶ > ₃ < ˶) & Bar-tholomew (≖_≖ ) </div>', unsafe_allow_html=True)
-
-# 3. Creator Attribution
 st.markdown('<div class="app-attribution">by JT</div>', unsafe_allow_html=True)
-
-# 4. Description Subtitle
 st.markdown('<p class="app-subtitle">Create any line or bar chart or both(Do not share the bot externally ⚠️)</p>', unsafe_allow_html=True)
-
-# 5. The Bold Divider
 st.markdown('<hr class="bold-divider">', unsafe_allow_html=True)
 
-# --- SIDEBAR LOGIC FLOW ---
+# --- SIDEBAR REORGANIZATION ---
 with st.sidebar:
-    st.header("1. Data Source")
+    # 1. UPLOAD DATA
+    st.header("1. Upload Data")
     file = st.file_uploader("Upload CSV/Excel", type=['xlsx', 'xls', 'csv'])
     sheet = None
     if file and file.name.endswith(('.xlsx', '.xls')):
@@ -209,71 +213,85 @@ with st.sidebar:
     if file:
         df_base = load_data(file, sheet_name=sheet)
         
-        st.header("2. Column Mapping")
-        date_col = st.selectbox("Select Date Column (X-Axis)", df_base.columns)
-        value_col = st.selectbox("Select Value Column (Y-Axis)", df_base.columns)
-        
-        st.header("3. Chart Title")
-        title = st.text_input("Title", DEFAULT_TITLE)
-        
-        st.header("4. Time Filters")
-        granularity = st.radio("Granularity", ['Yearly', 'Quarterly'])
+        # 2. SELECT DATA TO ANALYSIS
+        st.header("2. Select data to analysis")
+        date_col = st.selectbox("Select Time Column", df_base.columns)
+        granularity = st.radio("Time Period Type", ['Yearly', 'Quarterly'])
         
         try:
             temp_dates = pd.to_datetime(df_base[date_col].astype(str), format='mixed', errors='coerce').dropna()
             min_y, max_y = int(temp_dates.dt.year.min()), int(temp_dates.dt.year.max())
-            s_y = st.selectbox("Start Year", list(range(min_y, max_y + 1)), index=0)
-            e_y = st.selectbox("End Year", list(range(min_y, max_y + 1)), index=(max_y-min_y))
-        except (ValueError, TypeError):
-            st.info("Please select the data you want to show")
+            year_range = st.slider("Select Year Range", min_y, max_y, (min_y, max_y))
+            s_y, e_y = year_range
+        except:
+            st.info("Please ensure the date column is valid.")
             st.stop()
 
-        st.header("5. Visual Elements")
+        # 3. SELECT VALUE TO PLOT
+        st.header("3. Select value to plot")
         show_bars = st.checkbox("Show Bars", True)
         show_line = st.checkbox("Show Line", True)
-        line_mode, line_cat = ('Count', 'None')
+        
+        # Logic to pick columns based on user selection
+        value_col = st.selectbox("Select column to plot as Bar/Line value", df_base.columns)
+        
+        line_mode = 'Count'
         if show_line:
-            line_mode = st.radio("Line Metric", ['Count', 'Value'])
-            line_cat = st.selectbox("Split Line Category", ['None'] + [c for c in df_base.columns if c not in [date_col, value_col]])
-        
-        pred_y = st.selectbox("Prediction Start", list(range(s_y, e_y + 1))) if granularity == 'Yearly' and st.checkbox("Enable Predictions") else None
-        
-        st.header("6. Stacked Bar")
+            line_mode = st.radio("Line Metric Mode", ['Count', 'Value'])
+
+        # 4. SPLIT BY CATEGORY
+        st.header("4. Categorization (Split)")
         stack_col, colors, order = ('None', {}, {})
-        if st.checkbox('Enable Stacked Bar'):
-            stack_col = st.selectbox("Column", [c for c in df_base.columns if c not in [date_col, value_col]])
-            unique_cats = sorted([str(c) for c in df_base[stack_col].unique() if pd.notna(c)])
-            if unique_cats:
-                with st.sidebar:
-                    sorted_cats = sort_items(unique_cats, key='sort_bars')
-                colors = {c: st.selectbox(f"Color: {c}", list(PREDEFINED_COLORS.values()), index=i%6) for i, c in enumerate(sorted_cats)}
-                order = {c: i for i,c in enumerate(sorted_cats)}
-            
-        st.header("7. Data Filter")
-        configs = []
-        if st.checkbox('Enable Filtering'):
-            sel_f = st.multiselect("Columns", sorted([c for c in df_base.columns if c not in [date_col, value_col]]))
-            for f in sel_f:
-                with st.expander(f"Filter: {f}", expanded=True):
-                    vals = st.multiselect(f"Values", df_base[f].unique(), key=f"f_v_{f}")
-                    configs.append({'column': f, 'values': vals, 'include': st.radio(f"Mode", ["Include", "Exclude"], key=f"f_m_{f}") == "Include"})
+        line_cat = 'None'
         
-        st.header("8. Download")
+        if st.checkbox("Enable Split by Category Column"):
+            cat_target = st.multiselect("Apply split to:", ["Bars", "Line"])
+            split_col = st.selectbox("Category Column to split by", [c for c in df_base.columns if c not in [date_col, value_col]])
+            
+            if "Bars" in cat_target:
+                stack_col = split_col
+                unique_cats = sorted([str(c) for c in df_base[stack_col].unique() if pd.notna(c)])
+                if unique_cats:
+                    st.write("Sort/Rearrange categories:")
+                    sorted_cats = sort_items(unique_cats, key='sort_bars_new')
+                    order = {c: i for i,c in enumerate(sorted_cats)}
+                    # Colors handled in Labels section for unified key
+            
+            if "Line" in cat_target:
+                line_cat = split_col
+
+        # 5. LABEL & KEY
+        st.header("5. Labels & Colour Key")
+        title = st.text_input("Main Chart Title", DEFAULT_TITLE)
+        y_axis_title = st.text_input("Y Axis Title", "Value")
+        
+        # Color mapping logic
+        if stack_col != 'None':
+            st.write("**Colour Key for Bars:**")
+            cats_for_color = sorted([str(c) for c in df_base[stack_col].unique() if pd.notna(c)])
+            colors = {c: st.selectbox(f"Color for {c}", list(PREDEFINED_COLORS.values()), index=i%6, key=f"col_{c}") for i, c in enumerate(cats_for_color)}
+
+        # 6. EXPORT
+        st.header("6. Export")
+        export_format = st.selectbox("Format", options=['PNG', 'SVG (Vectorized)'])
         buf_p, buf_s = BytesIO(), BytesIO()
 
+# --- MAIN LOGIC & RENDERING ---
 if file and 'df_base' in locals() and df_base is not None:
-    df_f = apply_filter(df_base, configs)
+    # Handle simple filtering if needed or just use current configs
+    df_f = df_base.copy() 
     final, err_p = process_data(df_f, date_col, value_col, (s_y, e_y), stack_col, line_cat, granularity, line_mode)
     
     if final is not None:
-        col_chart, _ = st.columns([4, 1])
-        with col_chart:
-            fig = generate_chart(final, value_col, stack_col, show_bars, show_line, title, colors, order, pred_y, line_cat, granularity, line_mode)
-            st.pyplot(fig)
+        fig = generate_chart(final, value_col, stack_col, show_bars, show_line, title, y_axis_title, colors, order, None, line_cat, granularity, line_mode)
+        st.pyplot(fig)
         
         fig.savefig(buf_p, format='png', dpi=300, bbox_inches='tight')
         fig.savefig(buf_s, format='svg', bbox_inches='tight')
-        st.sidebar.download_button("Download PNG", buf_p.getvalue(), "chart.png", use_container_width=True)
-        st.sidebar.download_button("Download Adobe SVG", buf_s.getvalue(), "chart.svg", use_container_width=True)
+        
+        if export_format == 'PNG':
+            st.sidebar.download_button("Download PNG", buf_p.getvalue(), "chart.png", use_container_width=True)
+        else:
+            st.sidebar.download_button("Download SVG", buf_s.getvalue(), "chart.svg", use_container_width=True)
 else: 
     st.info("⬆️ Please upload your data file in the sidebar to begin.")
