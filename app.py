@@ -200,7 +200,10 @@ st.markdown('<div class="app-attribution">by JT</div>', unsafe_allow_html=True)
 st.markdown('<p class="app-subtitle">Create any line or bar chart or both(Do not share the bot externally ⚠️)</p>', unsafe_allow_html=True)
 st.markdown('<hr class="bold-divider">', unsafe_allow_html=True)
 
-# --- SIDEBAR REORGANIZATION ---
+# --- SIDEBAR LOGIC FLOW ---
+if 'generate_clicked' not in st.session_state:
+    st.session_state.generate_clicked = False
+
 with st.sidebar:
     # 1. UPLOAD DATA
     st.header("1. Upload Data")
@@ -213,59 +216,88 @@ with st.sidebar:
     if file:
         df_base = load_data(file, sheet_name=sheet)
         
+        # 1.1 DATA FILTERING FUNCTION
+        configs = []
+        if st.checkbox("Filter any data?"):
+            sel_f = st.multiselect("Pick column to filter", sorted([c for c in df_base.columns]))
+            for f in sel_f:
+                with st.expander(f"Filter settings: {f}", expanded=True):
+                    vals = st.multiselect(f"Pick categories", df_base[f].unique(), key=f"f_v_{f}")
+                    mode = st.radio(f"Mode for {f}", ["Include", "Exclude"], key=f"f_m_{f}")
+                    configs.append({'column': f, 'values': vals, 'include': mode == "Include"})
+
         # 2. SELECT DATA TO ANALYSIS
         st.header("2. Select data to analysis")
-        date_col = st.selectbox("Select Time Column", df_base.columns)
+        date_col = st.selectbox("Select Time Column", options=[None] + list(df_base.columns), index=0)
         granularity = st.radio("Time Period Type", ['Yearly', 'Quarterly'])
         
-        try:
-            temp_dates = pd.to_datetime(df_base[date_col].astype(str), format='mixed', errors='coerce').dropna()
-            min_y, max_y = int(temp_dates.dt.year.min()), int(temp_dates.dt.year.max())
-            year_range = st.slider("Select Year Range", min_y, max_y, (min_y, max_y))
-            s_y, e_y = year_range
-        except:
-            st.info("Please ensure the date column is valid.")
+        if date_col:
+            try:
+                temp_dates = pd.to_datetime(df_base[date_col].astype(str), format='mixed', errors='coerce').dropna()
+                min_y, max_y = int(temp_dates.dt.year.min()), int(temp_dates.dt.year.max())
+                
+                # --- MODIFIED DATE SELECTION: Slider replaced by two selectboxes ---
+                col_s, col_e = st.columns(2)
+                with col_s:
+                    s_y = st.selectbox("Start Year", list(range(min_y, max_y + 1)), index=0)
+                with col_e:
+                    e_y = st.selectbox("End Year", list(range(min_y, max_y + 1)), index=(max_y-min_y))
+                
+                if s_y > e_y:
+                    st.warning("Start Year cannot be after End Year.")
+                    st.stop()
+            except:
+                st.info("Please ensure the date column is valid.")
+                st.stop()
+        else:
             st.stop()
 
         # 3. SELECT VALUE TO PLOT
         st.header("3. Select value to plot")
         show_bars = st.checkbox("Show Bars", True)
         show_line = st.checkbox("Show Line", True)
+        value_col = st.selectbox("Select column to plot as value", options=[None] + list(df_base.columns), index=0)
         
-        # Logic to pick columns based on user selection
-        value_col = st.selectbox("Select column to plot as Bar/Line value", df_base.columns)
-        
+        if not value_col:
+            st.stop()
+
         line_mode = 'Count'
         if show_line:
             line_mode = st.radio("Line Metric Mode", ['Count', 'Value'])
 
-        # 4. SPLIT BY CATEGORY
-        st.header("4. Categorization (Split)")
+        # 4. SPLIT LINES OR STACKED BAR?
+        st.header("4. Split lines or stacked bar?")
         stack_col, colors, order = ('None', {}, {})
         line_cat = 'None'
         
-        if st.checkbox("Enable Split by Category Column"):
+        if st.checkbox("Enable Split/Stack Settings"):
             cat_target = st.multiselect("Apply split to:", ["Bars", "Line"])
-            split_col = st.selectbox("Category Column to split by", [c for c in df_base.columns if c not in [date_col, value_col]])
+            split_col = st.selectbox("Pick column to split by", options=[None] + [c for c in df_base.columns if c not in [date_col, value_col]], index=0)
             
-            if "Bars" in cat_target:
-                stack_col = split_col
-                unique_cats = sorted([str(c) for c in df_base[stack_col].unique() if pd.notna(c)])
-                if unique_cats:
-                    st.write("Sort/Rearrange categories:")
-                    sorted_cats = sort_items(unique_cats, key='sort_bars_new')
-                    order = {c: i for i,c in enumerate(sorted_cats)}
-                    # Colors handled in Labels section for unified key
-            
-            if "Line" in cat_target:
-                line_cat = split_col
+            if split_col:
+                if "Bars" in cat_target:
+                    stack_col = split_col
+                    unique_cats = sorted([str(c) for c in df_base[stack_col].unique() if pd.notna(c)])
+                    if unique_cats:
+                        st.write("Rearrange categories for Stacked Bars:")
+                        sorted_cats = sort_items(unique_cats, key='sort_bars_new')
+                        order = {c: i for i,c in enumerate(sorted_cats)}
+                
+                if "Line" in cat_target:
+                    line_cat = split_col
+
+                if st.button("Generate"):
+                    st.session_state.generate_clicked = True
+            else:
+                st.session_state.generate_clicked = False
+        else:
+            st.session_state.generate_clicked = True
 
         # 5. LABEL & KEY
         st.header("5. Labels & Colour Key")
         title = st.text_input("Main Chart Title", DEFAULT_TITLE)
         y_axis_title = st.text_input("Y Axis Title", "Value")
         
-        # Color mapping logic
         if stack_col != 'None':
             st.write("**Colour Key for Bars:**")
             cats_for_color = sorted([str(c) for c in df_base[stack_col].unique() if pd.notna(c)])
@@ -277,9 +309,8 @@ with st.sidebar:
         buf_p, buf_s = BytesIO(), BytesIO()
 
 # --- MAIN LOGIC & RENDERING ---
-if file and 'df_base' in locals() and df_base is not None:
-    # Handle simple filtering if needed or just use current configs
-    df_f = df_base.copy() 
+if file and 'df_base' in locals() and df_base is not None and st.session_state.generate_clicked:
+    df_f = apply_filter(df_base, configs)
     final, err_p = process_data(df_f, date_col, value_col, (s_y, e_y), stack_col, line_cat, granularity, line_mode)
     
     if final is not None:
@@ -293,5 +324,7 @@ if file and 'df_base' in locals() and df_base is not None:
             st.sidebar.download_button("Download PNG", buf_p.getvalue(), "chart.png", use_container_width=True)
         else:
             st.sidebar.download_button("Download SVG", buf_s.getvalue(), "chart.svg", use_container_width=True)
+elif file and not st.session_state.generate_clicked:
+    st.info("Please configure your split settings and click 'Generate' to see the chart.")
 else: 
     st.info("⬆️ Please upload your data file in the sidebar to begin.")
