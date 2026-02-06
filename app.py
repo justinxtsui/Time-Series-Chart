@@ -165,9 +165,15 @@ def generate_chart(final_data, bar_val_col, cat_col, show_bars, show_line, title
     x_pos, time_labels = np.arange(len(final_data)), final_data['time_period'].values
     font_size = int(max(8, min(22, 150 / len(final_data))))
     
-    bar_cols = [c for c in final_data.columns if not str(c).startswith('line_split_') and c not in ['time_period', 'line_metric']]
-    if order: bar_cols.sort(key=lambda x: order.get(x, 999))
-    y_max = final_data[bar_cols].sum(axis=1).max() if bar_cols else 1
+    # --- FIX: Use .loc to ensure bar_cols are treated as columns, preventing boolean indexing errors ---
+    bar_cols = [c for c in final_data.columns if not str(c).startswith('line_split_') and c not in ['time_period', 'line_metric', 'bar_total']]
+    if 'bar_total' in final_data.columns:
+        bar_cols = ['bar_total']
+        
+    if order and cat_col != 'None': 
+        bar_cols.sort(key=lambda x: order.get(x, 999))
+        
+    y_max = final_data.loc[:, bar_cols].sum(axis=1).max() if bar_cols else 1
 
     if show_bars:
         if cat_col != 'None':
@@ -177,16 +183,15 @@ def generate_chart(final_data, bar_val_col, cat_col, show_bars, show_line, title
                 for i in range(len(final_data)):
                     val = final_data[cat].iloc[i]
                     if val > 0:
-                        bc = c
-                        ax1.bar(x_pos[i], val, 0.8, bottom=bottom[i], color=bc, edgecolor='none', linewidth=0)
+                        ax1.bar(x_pos[i], val, 0.8, bottom=bottom[i], color=c, edgecolor='none', linewidth=0)
                         label_text = str(int(val)) if bar_val_col == "Row Count" else format_currency(val)
-                        ax1.text(x_pos[i], (bottom[i] + y_max*0.01) if idx == 0 else (bottom[i] + val/2), label_text, ha='center', va='bottom' if idx == 0 else 'center', fontsize=font_size, fontweight='bold', color='#FFFFFF' if is_dark_color(bc) else '#000000')
+                        ax1.text(x_pos[i], (bottom[i] + y_max*0.01) if idx == 0 else (bottom[i] + val/2), label_text, ha='center', va='bottom' if idx == 0 else 'center', fontsize=font_size, fontweight='bold', color='#FFFFFF' if is_dark_color(c) else '#000000')
                     bottom[i] += val
         else:
             col_to_plot = 'bar_total' if 'bar_total' in final_data.columns else bar_val_col
             for i in range(len(final_data)):
-                val, bc = final_data[col_to_plot].iloc[i], SINGLE_BAR_COLOR
-                ax1.bar(x_pos[i], val, 0.8, color=bc, edgecolor='none', linewidth=0)
+                val = final_data[col_to_plot].iloc[i]
+                ax1.bar(x_pos[i], val, 0.8, color=SINGLE_BAR_COLOR, edgecolor='none', linewidth=0)
                 if val > 0:
                     label_text = str(int(val)) if bar_val_col == "Row Count" else format_currency(val)
                     ax1.text(x_pos[i], y_max*0.01, label_text, ha='center', va='bottom', fontsize=font_size, fontweight='bold', color='#000000')
@@ -203,8 +208,7 @@ def generate_chart(final_data, bar_val_col, cat_col, show_bars, show_line, title
             lc = SPLIT_LINE_PALETTE[idx % len(SPLIT_LINE_PALETTE)] if line_cat_col != 'None' else DEFAULT_LINE_COLOR
             ax2.plot(x_pos, final_data[l_col].values, color=lc, marker='o', linestyle='-', linewidth=2.5, markersize=8)
             for i, y in enumerate(final_data[l_col].values):
-                label_text = str(int(y)) 
-                ax2.text(x_pos[i], y + l_max*0.05, label_text, ha='center', va='bottom', fontsize=font_size, color=lc, fontweight='bold')
+                ax2.text(x_pos[i], y + l_max*0.05, str(int(y)), ha='center', va='bottom', fontsize=font_size, color=lc, fontweight='bold')
         ax2.axis('off'); ax2.set_ylim(0, l_max * 1.6)
 
     handles = []
@@ -221,7 +225,7 @@ def generate_chart(final_data, bar_val_col, cat_col, show_bars, show_line, title
 st.image("https://github.com/justinxtsui/Time-Series-Chart/blob/main/Screenshot%202026-02-06%20at%2016.51.25.png?raw=true", width=250) 
 st.markdown('<div class="app-title">Line-us (˶ > ₃ < ˶) & Bar-tholomew (≖_≖ ) </div>', unsafe_allow_html=True)
 st.markdown('<div class="app-attribution">by JT</div>', unsafe_allow_html=True)
-st.markdown('<p class="app-subtitle">Create any line or bar chart or both(Do not share the bot externally ⚠️)</p>', unsafe_allow_html=True)
+st.markdown('<p class="app-subtitle">Create any line or bar chart or both (Do not share the bot externally ⚠️)</p>', unsafe_allow_html=True)
 st.markdown('<hr class="bold-divider">', unsafe_allow_html=True)
 
 # --- SIDEBAR LOGIC FLOW ---
@@ -230,18 +234,18 @@ if 'generate_clicked' not in st.session_state:
 
 with st.sidebar:
     st.header("1. Upload Data")
-    file = st.file_uploader("Upload CSV/Excel", type=['xlsx', 'xls', 'csv'])
+    file = st.file_uploader("Upload CSV/Excel", type=['csv', 'xlsx', 'xls'], key="file_upload_main")
     sheet = None
     if file and file.name.endswith(('.xlsx', '.xls')):
         xl = pd.ExcelFile(file)
         sheet = st.selectbox("Select Sheet", xl.sheet_names)
     
+    configs = []
     if file:
         df_base = load_data(file, sheet_name=sheet)
         
-        configs = []
         if st.checkbox("Filter any data?"):
-            sel_f = st.multiselect("Pick column to filter", sorted([c for c in df_base.columns]))
+            sel_f = st.multiselect("Pick column to filter", sorted(list(df_base.columns)))
             for f in sel_f:
                 with st.expander(f"Filter settings: {f}", expanded=True):
                     vals = st.multiselect(f"Pick categories", df_base[f].unique(), key=f"f_v_{f}")
@@ -253,24 +257,22 @@ with st.sidebar:
         granularity = st.radio("Time Period Type", ['Yearly', 'Quarterly'])
         
         if date_col:
-            temp_dates = pd.to_datetime(df_base[date_col].astype(str), format='mixed', errors='coerce').dropna()
-            min_y, max_y = int(temp_dates.dt.year.min()), int(temp_dates.dt.year.max())
-            col_s, col_e = st.columns(2)
-            with col_s: s_y = st.selectbox("Start Year", list(range(min_y, max_y + 1)), index=0)
-            with col_e: e_y = st.selectbox("End Year", list(range(min_y, max_y + 1)), index=(max_y-min_y))
-            if s_y > e_y: st.warning("Start > End"); st.stop()
+            try:
+                temp_dates = pd.to_datetime(df_base[date_col].astype(str), format='mixed', errors='coerce').dropna()
+                min_y, max_y = int(temp_dates.dt.year.min()), int(temp_dates.dt.year.max())
+                col_s, col_e = st.columns(2)
+                with col_s: s_y = st.selectbox("Start Year", list(range(min_y, max_y + 1)), index=0)
+                with col_e: e_y = st.selectbox("End Year", list(range(min_y, max_y + 1)), index=(max_y-min_y))
+            except:
+                st.info("Invalid Date Column.")
+                st.stop()
         else: st.stop()
 
         st.header("3. Select value to plot")
         show_bars = st.checkbox("Show Bars", True)
-        bar_val_col = None
-        if show_bars:
-            bar_val_col = st.selectbox("Select column for Bars", options=[None, "Row Count"] + list(df_base.columns), index=0)
-
+        bar_val_col = st.selectbox("Select column for Bars", options=[None, "Row Count"] + list(df_base.columns), index=0) if show_bars else None
         show_line = st.checkbox("Show Line", True)
-        line_val_col = None
-        if show_line:
-            line_val_col = st.selectbox("Select column for Line", options=[None, "Row Count"] + list(df_base.columns), index=0)
+        line_val_col = st.selectbox("Select column for Line", options=[None, "Row Count"] + list(df_base.columns), index=0) if show_line else None
 
         if (show_bars and not bar_val_col) or (show_line and not line_val_col):
             st.stop()
@@ -288,15 +290,12 @@ with st.sidebar:
                     stack_col = split_col
                     unique_cats = sorted([str(c) for c in df_base[stack_col].unique() if pd.notna(c)])
                     if unique_cats:
-                        st.write("Rearrange categories for Stacked Bars:")
                         sorted_cats = sort_items(unique_cats, key='sort_bars_new')
                         order = {c: i for i,c in enumerate(sorted_cats)}
                 if "Line" in cat_target: line_cat = split_col
                 if st.button("Generate"): st.session_state.generate_clicked = True
-            else:
-                st.session_state.generate_clicked = False
-        else:
-            st.session_state.generate_clicked = True
+            else: st.session_state.generate_clicked = False
+        else: st.session_state.generate_clicked = True
 
         st.header("5. Labels & Colour Key")
         title = st.text_input("Main Chart Title", DEFAULT_TITLE)
@@ -307,8 +306,7 @@ with st.sidebar:
             colors = {c: st.selectbox(f"Color for {c}", list(PREDEFINED_COLORS.values()), index=i%6, key=f"col_{c}") for i, c in enumerate(cats_for_color)}
 
         st.header("6. Export")
-        export_format = st.selectbox("Format", options=['PNG', 'SVG (Vectorized)'])
-        buf_p, buf_s = BytesIO(), BytesIO()
+        export_format = st.selectbox("Format", options=['PNG', 'SVG (Vectorised)'])
 
 # --- MAIN LOGIC & RENDERING ---
 if file and st.session_state.generate_clicked:
@@ -319,11 +317,10 @@ if file and st.session_state.generate_clicked:
         fig = generate_chart(final, bar_val_col, stack_col, show_bars, show_line, title, y_axis_title, colors, order, 3000, line_cat, granularity)
         st.pyplot(fig)
         
-        # Buffer save
+        buf_p, buf_s = BytesIO(), BytesIO()
         fig.savefig(buf_p, format='png', dpi=300, bbox_inches='tight')
         fig.savefig(buf_s, format='svg', bbox_inches='tight')
         
-        # Download Section in Sidebar
         with st.sidebar:
             st.divider()
             btn_label = f"Download {export_format}"
@@ -332,6 +329,6 @@ if file and st.session_state.generate_clicked:
             else:
                 st.download_button(btn_label, buf_s.getvalue(), "chart.svg", use_container_width=True)
 elif file and not st.session_state.generate_clicked:
-    st.info("Please configure your split settings and click 'Generate' to see the chart.")
+    st.info("Please configure settings and click 'Generate'.")
 else: 
-    st.info("⬆️ Please upload your data file in the sidebar to begin.")
+    st.info("⬆️ Please upload your data file to begin.")
