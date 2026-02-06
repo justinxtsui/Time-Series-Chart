@@ -113,7 +113,7 @@ def apply_filter(df, filter_configs):
         if values: temp_df = temp_df[temp_df[col].isin(values)] if include else temp_df[~temp_df[col].isin(values)]
     return temp_df
 
-def process_data(df, date_col, bar_val_col, line_val_col, year_range, cat_col, line_cat_col, granularity):
+def process_data(df, date_col, bar_val_col, line_val_col, year_range, line_cat_col, granularity):
     df = df.copy()
     df[date_col] = pd.to_datetime(df[date_col].astype(str), format='mixed', errors='coerce')
     df.dropna(subset=[date_col], inplace=True)
@@ -144,15 +144,11 @@ def process_data(df, date_col, bar_val_col, line_val_col, year_range, cat_col, l
     chart_data['time_period'] = chart_data[date_col].dt.to_period('Q').astype(str) if granularity == 'Quarterly' else chart_data[date_col].dt.year
     chart_data = chart_data.sort_values(date_col)
     
-    # 1. Process Bars
-    if cat_col != 'None' and cat_col in chart_data.columns:
-        grouped_bars = chart_data.groupby(['time_period', cat_col]).agg({bar_col_to_use: 'sum'}).reset_index()
-        final_data = grouped_bars.pivot(index='time_period', columns=cat_col, values=bar_col_to_use).fillna(0).reset_index()
-    else: 
-        final_data = chart_data.groupby('time_period').agg({bar_col_to_use: 'sum'}).reset_index()
-        final_data.rename(columns={bar_col_to_use: 'bar_total'}, inplace=True)
+    # 1. Process Bars (Simple Sum)
+    final_data = chart_data.groupby('time_period').agg({bar_col_to_use: 'sum'}).reset_index()
+    final_data.rename(columns={bar_col_to_use: 'bar_total'}, inplace=True)
 
-    # 2. Process Lines
+    # 2. Process Lines (Split or Simple)
     if line_cat_col != 'None' and line_cat_col in chart_data.columns:
         line_grouped = chart_data.groupby(['time_period', line_cat_col])[line_col_to_use].sum().reset_index()
         line_pivot = line_grouped.pivot(index='time_period', columns=line_cat_col, values=line_col_to_use).fillna(0)
@@ -164,68 +160,40 @@ def process_data(df, date_col, bar_val_col, line_val_col, year_range, cat_col, l
         
     return final_data, None
 
-def generate_chart(final_data, bar_val_col, cat_col, show_bars, show_line, title, y_axis_title, colors, order, pred_y, line_cat_col, granularity):
+def generate_chart(final_data, bar_val_col, show_bars, show_line, title, y_axis_title, pred_y, line_cat_col, granularity):
     fig, ax1 = plt.subplots(figsize=(20, 10))
     x_pos, time_labels = np.arange(len(final_data)), final_data['time_period'].values
     font_size = int(max(8, min(22, 150 / len(final_data))))
     
-    # --- ROBUST COLUMN SELECTION ---
-    exclude_cols = ['time_period', 'line_metric', 'bar_total']
-    
-    # 1. Collect potential bar columns (filtering out metadata and split lines)
-    potential_cols = [c for c in final_data.columns if not str(c).startswith('line_split_') and c not in exclude_cols]
-    
-    # 2. Validate columns exist
-    valid_bar_cols = []
+    # Scale Calculation
     if 'bar_total' in final_data.columns:
-        valid_bar_cols = ['bar_total']
-    elif potential_cols:
-        valid_bar_cols = [c for c in potential_cols if c in final_data.columns]
-        if order and cat_col != 'None':
-            valid_bar_cols.sort(key=lambda x: order.get(x, 999))
-    
-    # 3. Safe Summation
-    if valid_bar_cols:
-        # Use .filter() to safely select columns without triggering boolean masking
-        y_max = final_data[valid_bar_cols].sum(axis=1).max()
+        y_max = final_data['bar_total'].max()
     else:
         y_max = 1
-        
     y_max = y_max if y_max > 0 else 1
 
-    if show_bars:
-        if cat_col != 'None' and valid_bar_cols:
-            bottom = np.zeros(len(final_data))
-            for idx, cat in enumerate(valid_bar_cols):
-                c = colors.get(cat, CATEGORY_COLORS[idx % len(CATEGORY_COLORS)])
-                for i in range(len(final_data)):
-                    val = final_data[cat].iloc[i]
-                    if val > 0:
-                        bc = c 
-                        ax1.bar(x_pos[i], val, 0.8, bottom=bottom[i], color=bc, edgecolor='none', linewidth=0)
-                        label_text = str(int(val)) if bar_val_col == "Row Count" else format_currency(val)
-                        ax1.text(x_pos[i], (bottom[i] + y_max*0.01) if idx == 0 else (bottom[i] + val/2), label_text, ha='center', va='bottom' if idx == 0 else 'center', fontsize=font_size, fontweight='bold', color='#FFFFFF' if is_dark_color(bc) else '#000000')
-                    bottom[i] += val
-        elif 'bar_total' in final_data.columns:
-            col_to_plot = 'bar_total'
-            for i in range(len(final_data)):
-                val = final_data[col_to_plot].iloc[i]
-                ax1.bar(x_pos[i], val, 0.8, color=SINGLE_BAR_COLOR, edgecolor='none', linewidth=0)
-                if val > 0:
-                    label_text = str(int(val)) if bar_val_col == "Row Count" else format_currency(val)
-                    ax1.text(x_pos[i], y_max*0.01, label_text, ha='center', va='bottom', fontsize=font_size, fontweight='bold', color='#000000')
+    # Plot Bars
+    if show_bars and 'bar_total' in final_data.columns:
+        for i in range(len(final_data)):
+            val = final_data['bar_total'].iloc[i]
+            # Simple bar plot
+            ax1.bar(x_pos[i], val, 0.8, color=SINGLE_BAR_COLOR, edgecolor='none', linewidth=0)
+            if val > 0:
+                label_text = str(int(val)) if bar_val_col == "Row Count" else format_currency(val)
+                ax1.text(x_pos[i], y_max*0.01, label_text, ha='center', va='bottom', fontsize=font_size, fontweight='bold', color='#000000')
 
     ax1.set_xticks(x_pos); ax1.set_xticklabels(time_labels, fontsize=font_size); ax1.set_ylim(0, y_max * 1.15)
     ax1.set_ylabel(y_axis_title, fontsize=16, fontweight='bold')
     ax1.tick_params(left=False, labelleft=False, length=0); [s.set_visible(False) for s in ax1.spines.values()]
 
+    # Plot Lines
     if show_line:
         ax2 = ax1.twinx()
         line_cols = [c for c in final_data.columns if str(c).startswith('line_split_')] if line_cat_col != 'None' else ['line_metric']
         valid_line_cols = [c for c in line_cols if c in final_data.columns]
         
         if valid_line_cols:
-            l_max = final_data[valid_line_cols].values.max()
+            l_max = final_data.loc[:, valid_line_cols].values.max()
             l_max = l_max if l_max > 0 else 1
             for idx, l_col in enumerate(valid_line_cols):
                 lc = SPLIT_LINE_PALETTE[idx % len(SPLIT_LINE_PALETTE)] if line_cat_col != 'None' else DEFAULT_LINE_COLOR
@@ -235,15 +203,19 @@ def generate_chart(final_data, bar_val_col, cat_col, show_bars, show_line, title
                     ax2.text(x_pos[i], y + l_max*0.05, label_text, ha='center', va='bottom', fontsize=font_size, color=lc, fontweight='bold')
             ax2.axis('off'); ax2.set_ylim(0, l_max * 1.6)
 
+    # Legends
     handles = []
     if show_bars:
-        if cat_col != 'None' and 'valid_bar_cols' in locals():
-             handles += [Line2D([0], [0], marker='s', color='w', markerfacecolor=colors.get(c, PURPLE), markersize=12, label=c) for c in valid_bar_cols]
-        else: handles.append(Line2D([0], [0], marker='s', color='w', markerfacecolor=SINGLE_BAR_COLOR, markersize=12, label='Value'))
+        handles.append(Line2D([0], [0], marker='s', color='w', markerfacecolor=SINGLE_BAR_COLOR, markersize=12, label='Value'))
     if show_line and 'valid_line_cols' in locals():
-        if line_cat_col != 'None': handles += [Line2D([0], [0], color=SPLIT_LINE_PALETTE[i % len(SPLIT_LINE_PALETTE)], marker='o', label=f"{str(c).replace('line_split_', '')}") for i, c in enumerate(valid_line_cols)]
-        else: handles.append(Line2D([0], [0], color=DEFAULT_LINE_COLOR, marker='o', label='Line Metric'))
-    if handles: ax1.legend(handles=handles, loc='upper left', frameon=False, prop={'size': 14}, ncol=2)
+        if line_cat_col != 'None': 
+            handles += [Line2D([0], [0], color=SPLIT_LINE_PALETTE[i % len(SPLIT_LINE_PALETTE)], marker='o', label=f"{str(c).replace('line_split_', '')}") for i, c in enumerate(valid_line_cols)]
+        else: 
+            handles.append(Line2D([0], [0], color=DEFAULT_LINE_COLOR, marker='o', label='Line Metric'))
+    
+    if handles: 
+        ax1.legend(handles=handles, loc='upper left', frameon=False, prop={'size': 14}, ncol=2)
+    
     plt.title(title, fontsize=22, fontweight='bold', pad=30); return fig
 
 # --- APP HEADER AREA ---
@@ -254,9 +226,6 @@ st.markdown('<p class="app-subtitle">Create any line or bar chart or both (Do no
 st.markdown('<hr class="bold-divider">', unsafe_allow_html=True)
 
 # --- SIDEBAR LOGIC FLOW ---
-if 'generate_clicked' not in st.session_state:
-    st.session_state.generate_clicked = False
-
 with st.sidebar:
     st.header("1. Upload Data")
     file = st.file_uploader("Upload CSV/Excel", type=['csv', 'xlsx', 'xls'], key="file_upload_main")
@@ -294,52 +263,38 @@ with st.sidebar:
         else: st.stop()
 
         st.header("3. Select value to plot")
-        show_bars = st.checkbox("Show Bars", True)
+        show_bars = st.checkbox("Show Bars", value=False)
         bar_val_col = st.selectbox("Select column for Bars", options=[None, "Row Count"] + list(df_base.columns), index=0) if show_bars else None
-        show_line = st.checkbox("Show Line", True)
-        line_val_col = st.selectbox("Select column for Line", options=[None, "Row Count"] + list(df_base.columns), index=0) if show_line else None
+        
+        show_line = st.checkbox("Show Line", value=False)
+        line_val_col = None
+        line_cat = 'None'
+        
+        if show_line:
+            line_val_col = st.selectbox("Select column for Line", options=[None, "Row Count"] + list(df_base.columns), index=0)
+            
+            # Split Line Logic Moved Here
+            if st.checkbox("Split Line by Category"):
+                line_cat = st.selectbox("Pick column to split by", options=[None] + [c for c in df_base.columns if c not in [date_col, bar_val_col, line_val_col]], index=0)
+                if not line_cat: line_cat = 'None'
 
         if (show_bars and not bar_val_col) or (show_line and not line_val_col):
             st.stop()
 
-        st.header("4. Split lines or stacked bar?")
-        stack_col, colors, order = ('None', {}, {})
-        line_cat = 'None'
-        
-        if st.checkbox("Enable Split/Stack Settings"):
-            cat_target = st.multiselect("Apply split to:", ["Bars", "Line"])
-            split_col = st.selectbox("Pick column to split by", options=[None] + [c for c in df_base.columns if c not in [date_col, bar_val_col, line_val_col]], index=0)
-            
-            if split_col:
-                if "Bars" in cat_target:
-                    stack_col = split_col
-                    unique_cats = sorted([str(c) for c in df_base[stack_col].unique() if pd.notna(c)])
-                    if unique_cats:
-                        sorted_cats = sort_items(unique_cats, key='sort_bars_new')
-                        order = {c: i for i,c in enumerate(sorted_cats)}
-                if "Line" in cat_target: line_cat = split_col
-                if st.button("Generate"): st.session_state.generate_clicked = True
-            else: st.session_state.generate_clicked = False
-        else: st.session_state.generate_clicked = True
-
-        st.header("5. Labels & Colour Key")
+        st.header("4. Labels")
         title = st.text_input("Main Chart Title", DEFAULT_TITLE)
         y_axis_title = st.text_input("Y Axis Title", "Value")
-        if stack_col != 'None':
-            st.write("**Colour Key for Bars:**")
-            cats_for_color = sorted([str(c) for c in df_base[stack_col].unique() if pd.notna(c)])
-            colors = {c: st.selectbox(f"Color for {c}", list(PREDEFINED_COLORS.values()), index=i%6, key=f"col_{c}") for i, c in enumerate(cats_for_color)}
 
-        st.header("6. Export")
+        st.header("5. Export")
         export_format = st.selectbox("Format", options=['PNG', 'SVG (Vectorized)'])
 
 # --- MAIN LOGIC & RENDERING ---
-if file and st.session_state.generate_clicked:
+if file:
     df_f = apply_filter(df_base, configs)
-    final, err_p = process_data(df_f, date_col, bar_val_col, line_val_col, (s_y, e_y), stack_col, line_cat, granularity)
+    final, err_p = process_data(df_f, date_col, bar_val_col, line_val_col, (s_y, e_y), line_cat, granularity)
     
     if final is not None:
-        fig = generate_chart(final, bar_val_col, stack_col, show_bars, show_line, title, y_axis_title, colors, order, 3000, line_cat, granularity)
+        fig = generate_chart(final, bar_val_col, show_bars, show_line, title, y_axis_title, 3000, line_cat, granularity)
         st.pyplot(fig)
         
         buf_p, buf_s = BytesIO(), BytesIO()
@@ -353,7 +308,5 @@ if file and st.session_state.generate_clicked:
                 st.download_button(btn_label, buf_p.getvalue(), "chart.png", use_container_width=True)
             else:
                 st.download_button(btn_label, buf_s.getvalue(), "chart.svg", use_container_width=True)
-elif file and not st.session_state.generate_clicked:
-    st.info("Please configure settings and click 'Generate'.")
 else: 
     st.info("⬆️ Please upload your data file to begin.")
