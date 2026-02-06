@@ -165,27 +165,30 @@ def generate_chart(final_data, bar_val_col, cat_col, show_bars, show_line, title
     x_pos, time_labels = np.arange(len(final_data)), final_data['time_period'].values
     font_size = int(max(8, min(22, 150 / len(final_data))))
     
-    # --- FIX: Ensure bar_cols is strictly a list of column names for loc ---
+    # --- FIX: Ensure we only attempt to sum columns that actually exist ---
+    exclude_cols = ['time_period', 'line_metric', 'bar_total']
+    bar_cols = [c for c in final_data.columns if not str(c).startswith('line_split_') and c not in exclude_cols]
+    
     if 'bar_total' in final_data.columns:
         bar_cols = ['bar_total']
-    else:
-        # Exclude metadata and line columns to find actual data bars
-        bar_cols = [str(c) for c in final_data.columns if not str(c).startswith('line_split_') and c not in ['time_period', 'line_metric']]
-        if order and cat_col != 'None':
-            bar_cols = [c for c in bar_cols if c in order]
-            bar_cols.sort(key=lambda x: order.get(x, 999))
-
-    # Calculate y_max safely
-    if bar_cols:
-        y_max = final_data[bar_cols].sum(axis=1).max()
+    
+    # Final check: are the bar_cols actually in the dataframe?
+    valid_bar_cols = [c for c in bar_cols if c in final_data.columns]
+    
+    if valid_bar_cols:
+        y_max = final_data[valid_bar_cols].sum(axis=1).max()
     else:
         y_max = 1
+        
     y_max = y_max if y_max > 0 else 1
 
     if show_bars:
-        if cat_col != 'None':
+        if cat_col != 'None' and valid_bar_cols:
+            if order:
+                valid_bar_cols.sort(key=lambda x: order.get(x, 999))
+            
             bottom = np.zeros(len(final_data))
-            for idx, cat in enumerate(bar_cols):
+            for idx, cat in enumerate(valid_bar_cols):
                 c = colors.get(cat, CATEGORY_COLORS[idx % len(CATEGORY_COLORS)])
                 for i in range(len(final_data)):
                     val = final_data[cat].iloc[i]
@@ -196,12 +199,13 @@ def generate_chart(final_data, bar_val_col, cat_col, show_bars, show_line, title
                     bottom[i] += val
         else:
             col_to_plot = 'bar_total' if 'bar_total' in final_data.columns else bar_val_col
-            for i in range(len(final_data)):
-                val = final_data[col_to_plot].iloc[i]
-                ax1.bar(x_pos[i], val, 0.8, color=SINGLE_BAR_COLOR, edgecolor='none', linewidth=0)
-                if val > 0:
-                    label_text = str(int(val)) if bar_val_col == "Row Count" else format_currency(val)
-                    ax1.text(x_pos[i], y_max*0.01, label_text, ha='center', va='bottom', fontsize=font_size, fontweight='bold', color='#000000')
+            if col_to_plot in final_data.columns:
+                for i in range(len(final_data)):
+                    val = final_data[col_to_plot].iloc[i]
+                    ax1.bar(x_pos[i], val, 0.8, color=SINGLE_BAR_COLOR, edgecolor='none', linewidth=0)
+                    if val > 0:
+                        label_text = str(int(val)) if bar_val_col == "Row Count" else format_currency(val)
+                        ax1.text(x_pos[i], y_max*0.01, label_text, ha='center', va='bottom', fontsize=font_size, fontweight='bold', color='#000000')
 
     ax1.set_xticks(x_pos); ax1.set_xticklabels(time_labels, fontsize=font_size); ax1.set_ylim(0, y_max * 1.15)
     ax1.set_ylabel(y_axis_title, fontsize=16, fontweight='bold')
@@ -224,9 +228,9 @@ def generate_chart(final_data, bar_val_col, cat_col, show_bars, show_line, title
 
     handles = []
     if show_bars:
-        if cat_col != 'None': handles += [Line2D([0], [0], marker='s', color='w', markerfacecolor=colors.get(c, PURPLE), markersize=12, label=c) for c in bar_cols]
+        if cat_col != 'None': handles += [Line2D([0], [0], marker='s', color='w', markerfacecolor=colors.get(c, PURPLE), markersize=12, label=c) for c in valid_bar_cols]
         else: handles.append(Line2D([0], [0], marker='s', color='w', markerfacecolor=SINGLE_BAR_COLOR, markersize=12, label='Value'))
-    if show_line:
+    if show_line and 'valid_line_cols' in locals():
         if line_cat_col != 'None': handles += [Line2D([0], [0], color=SPLIT_LINE_PALETTE[i % len(SPLIT_LINE_PALETTE)], marker='o', label=f"{str(c).replace('line_split_', '')}") for i, c in enumerate(valid_line_cols)]
         else: handles.append(Line2D([0], [0], color=DEFAULT_LINE_COLOR, marker='o', label='Line Metric'))
     if handles: ax1.legend(handles=handles, loc='upper left', frameon=False, prop={'size': 14}, ncol=2)
