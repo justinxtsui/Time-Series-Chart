@@ -165,15 +165,22 @@ def generate_chart(final_data, bar_val_col, cat_col, show_bars, show_line, title
     x_pos, time_labels = np.arange(len(final_data)), final_data['time_period'].values
     font_size = int(max(8, min(22, 150 / len(final_data))))
     
-    # --- FIX: Use .loc to ensure bar_cols are treated as columns, preventing boolean indexing errors ---
-    bar_cols = [c for c in final_data.columns if not str(c).startswith('line_split_') and c not in ['time_period', 'line_metric', 'bar_total']]
+    # --- FIX: Ensure bar_cols is strictly a list of column names for loc ---
     if 'bar_total' in final_data.columns:
         bar_cols = ['bar_total']
-        
-    if order and cat_col != 'None': 
-        bar_cols.sort(key=lambda x: order.get(x, 999))
-        
-    y_max = final_data.loc[:, bar_cols].sum(axis=1).max() if bar_cols else 1
+    else:
+        # Exclude metadata and line columns to find actual data bars
+        bar_cols = [str(c) for c in final_data.columns if not str(c).startswith('line_split_') and c not in ['time_period', 'line_metric']]
+        if order and cat_col != 'None':
+            bar_cols = [c for c in bar_cols if c in order]
+            bar_cols.sort(key=lambda x: order.get(x, 999))
+
+    # Calculate y_max safely
+    if bar_cols:
+        y_max = final_data[bar_cols].sum(axis=1).max()
+    else:
+        y_max = 1
+    y_max = y_max if y_max > 0 else 1
 
     if show_bars:
         if cat_col != 'None':
@@ -202,21 +209,25 @@ def generate_chart(final_data, bar_val_col, cat_col, show_bars, show_line, title
 
     if show_line:
         ax2 = ax1.twinx()
-        line_cols = [c for c in final_data.columns if c.startswith('line_split_')] if line_cat_col != 'None' else ['line_metric']
-        l_max = final_data[line_cols].values.max() if final_data[line_cols].values.size > 0 else 1
-        for idx, l_col in enumerate(line_cols):
-            lc = SPLIT_LINE_PALETTE[idx % len(SPLIT_LINE_PALETTE)] if line_cat_col != 'None' else DEFAULT_LINE_COLOR
-            ax2.plot(x_pos, final_data[l_col].values, color=lc, marker='o', linestyle='-', linewidth=2.5, markersize=8)
-            for i, y in enumerate(final_data[l_col].values):
-                ax2.text(x_pos[i], y + l_max*0.05, str(int(y)), ha='center', va='bottom', fontsize=font_size, color=lc, fontweight='bold')
-        ax2.axis('off'); ax2.set_ylim(0, l_max * 1.6)
+        line_cols = [c for c in final_data.columns if str(c).startswith('line_split_')] if line_cat_col != 'None' else ['line_metric']
+        valid_line_cols = [c for c in line_cols if c in final_data.columns]
+        
+        if valid_line_cols:
+            l_max = final_data[valid_line_cols].values.max()
+            l_max = l_max if l_max > 0 else 1
+            for idx, l_col in enumerate(valid_line_cols):
+                lc = SPLIT_LINE_PALETTE[idx % len(SPLIT_LINE_PALETTE)] if line_cat_col != 'None' else DEFAULT_LINE_COLOR
+                ax2.plot(x_pos, final_data[l_col].values, color=lc, marker='o', linestyle='-', linewidth=2.5, markersize=8)
+                for i, y in enumerate(final_data[l_col].values):
+                    ax2.text(x_pos[i], y + l_max*0.05, str(int(y)), ha='center', va='bottom', fontsize=font_size, color=lc, fontweight='bold')
+            ax2.axis('off'); ax2.set_ylim(0, l_max * 1.6)
 
     handles = []
     if show_bars:
         if cat_col != 'None': handles += [Line2D([0], [0], marker='s', color='w', markerfacecolor=colors.get(c, PURPLE), markersize=12, label=c) for c in bar_cols]
         else: handles.append(Line2D([0], [0], marker='s', color='w', markerfacecolor=SINGLE_BAR_COLOR, markersize=12, label='Value'))
     if show_line:
-        if line_cat_col != 'None': handles += [Line2D([0], [0], color=SPLIT_LINE_PALETTE[i % len(SPLIT_LINE_PALETTE)], marker='o', label=f"{c.replace('line_split_', '')}") for i, c in enumerate(line_cols)]
+        if line_cat_col != 'None': handles += [Line2D([0], [0], color=SPLIT_LINE_PALETTE[i % len(SPLIT_LINE_PALETTE)], marker='o', label=f"{str(c).replace('line_split_', '')}") for i, c in enumerate(valid_line_cols)]
         else: handles.append(Line2D([0], [0], color=DEFAULT_LINE_COLOR, marker='o', label='Line Metric'))
     if handles: ax1.legend(handles=handles, loc='upper left', frameon=False, prop={'size': 14}, ncol=2)
     plt.title(title, fontsize=22, fontweight='bold', pad=30); return fig
@@ -306,7 +317,7 @@ with st.sidebar:
             colors = {c: st.selectbox(f"Color for {c}", list(PREDEFINED_COLORS.values()), index=i%6, key=f"col_{c}") for i, c in enumerate(cats_for_color)}
 
         st.header("6. Export")
-        export_format = st.selectbox("Format", options=['PNG', 'SVG (Vectorised)'])
+        export_format = st.selectbox("Format", options=['PNG', 'SVG (Vectorized)'])
 
 # --- MAIN LOGIC & RENDERING ---
 if file and st.session_state.generate_clicked:
