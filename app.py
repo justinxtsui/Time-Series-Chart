@@ -184,7 +184,11 @@ def generate_chart(final_data, bar_val_col, show_bars, show_line, title, y_axis_
 
     ax1.set_xticks(x_pos); ax1.set_xticklabels(time_labels, fontsize=font_size); ax1.set_ylim(0, y_max * 1.15)
     ax1.set_ylabel(y_axis_title, fontsize=16, fontweight='bold')
-    ax1.tick_params(left=False, labelleft=False, length=0); [s.set_visible(False) for s in ax1.spines.values()]
+    
+    # --- FIX FOR "NULL" ARTIFACTS: Use standard loop instead of list comprehension ---
+    ax1.tick_params(left=False, labelleft=False, length=0)
+    for s in ax1.spines.values():
+        s.set_visible(False)
 
     # Plot Lines
     if show_line:
@@ -222,7 +226,8 @@ def generate_chart(final_data, bar_val_col, show_bars, show_line, title, y_axis_
 st.image("https://github.com/justinxtsui/Time-Series-Chart/blob/main/Screenshot%202026-02-06%20at%2016.51.25.png?raw=true", width=250) 
 st.markdown('<div class="app-title">Line-us (˶ > ₃ < ˶) & Bar-tholomew (≖_≖ ) </div>', unsafe_allow_html=True)
 st.markdown('<div class="app-attribution">by JT</div>', unsafe_allow_html=True)
-st.markdown('<p class="app-subtitle">Create any line or bar chart or both (Do not share the bot externally ⚠️)</p>', unsafe_allow_html=True)
+st.markdown('<p class="app-subtitle">Create any line or bar chart or both (Do not share the bot externally ⚠️) </p>', unsafe_allow_html=True)
+st.markdown('<p class="app-subtitle">(Do not share the bot externally ⚠️) </p>', unsafe_allow_html=True)
 st.markdown('<hr class="bold-divider">', unsafe_allow_html=True)
 
 # --- SIDEBAR LOGIC FLOW ---
