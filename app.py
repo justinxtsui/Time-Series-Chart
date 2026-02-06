@@ -183,16 +183,16 @@ def generate_chart(final_data, value_col, cat_col, show_bars, show_line, title, 
 
 # --- APP HEADER AREA ---
 # 1. Branding Image
-st.image("https://github.com/justinxtsui/Index-chart-maker/blob/main/Beauhurst%20Insights%20Logo.png?raw=true", width=300) 
+st.image("https://github.com/justinxtsui/Time-Series-Chart/blob/main/Screenshot%202026-02-06%20at%2016.51.25.png?raw=true", width=250) 
 
 # 2. Primary App Title
-st.markdown('<div class="app-title">Dexter ( ◡‿◡ )ᕤ</div>', unsafe_allow_html=True)
+st.markdown('<div class="app-title">Line-us (˶ > ₃ < ˶) & Bar-tholomew (≖_≖ ) </div>', unsafe_allow_html=True)
 
 # 3. Creator Attribution
-st.markdown('<div class="app-attribution">by JT @Beauhurst Insights</div>', unsafe_allow_html=True)
+st.markdown('<div class="app-attribution">by JT</div>', unsafe_allow_html=True)
 
 # 4. Description Subtitle
-st.markdown('<p class="app-subtitle">Turn fundraising exports into indexed time series charts (For internal use only)</p>', unsafe_allow_html=True)
+st.markdown('<p class="app-subtitle">Create any line or bar chart or both(Do not share the bot externally ⚠️)</p>', unsafe_allow_html=True)
 
 # 5. The Bold Divider
 st.markdown('<hr class="bold-divider">', unsafe_allow_html=True)
