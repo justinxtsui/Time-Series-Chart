@@ -170,24 +170,24 @@ def generate_chart(final_data, bar_val_col, cat_col, show_bars, show_line, title
     font_size = int(max(8, min(22, 150 / len(final_data))))
     
     # --- ROBUST COLUMN SELECTION ---
-    # 1. Identify potential columns that are NOT metadata/lines
     exclude_cols = ['time_period', 'line_metric', 'bar_total']
+    
+    # 1. Collect potential bar columns (filtering out metadata and split lines)
     potential_cols = [c for c in final_data.columns if not str(c).startswith('line_split_') and c not in exclude_cols]
     
-    # 2. Determine exactly which columns we want to sum/stack
+    # 2. Validate columns exist
     valid_bar_cols = []
     if 'bar_total' in final_data.columns:
         valid_bar_cols = ['bar_total']
     elif potential_cols:
-        # We are in split-category mode; filter to ensure columns exist
         valid_bar_cols = [c for c in potential_cols if c in final_data.columns]
         if order and cat_col != 'None':
             valid_bar_cols.sort(key=lambda x: order.get(x, 999))
     
-    # 3. Calculate Scale (y_max)
-    # Using .loc[:, cols] forces pandas to treat valid_bar_cols as column labels, avoiding the Boolean Mask Error.
+    # 3. Safe Summation
     if valid_bar_cols:
-        y_max = final_data.loc[:, valid_bar_cols].sum(axis=1).max()
+        # Use .filter() to safely select columns without triggering boolean masking
+        y_max = final_data[valid_bar_cols].sum(axis=1).max()
     else:
         y_max = 1
         
@@ -201,14 +201,15 @@ def generate_chart(final_data, bar_val_col, cat_col, show_bars, show_line, title
                 for i in range(len(final_data)):
                     val = final_data[cat].iloc[i]
                     if val > 0:
-                        bc = c # Add prediction shade logic if needed
+                        bc = c 
                         ax1.bar(x_pos[i], val, 0.8, bottom=bottom[i], color=bc, edgecolor='none', linewidth=0)
                         label_text = str(int(val)) if bar_val_col == "Row Count" else format_currency(val)
                         ax1.text(x_pos[i], (bottom[i] + y_max*0.01) if idx == 0 else (bottom[i] + val/2), label_text, ha='center', va='bottom' if idx == 0 else 'center', fontsize=font_size, fontweight='bold', color='#FFFFFF' if is_dark_color(bc) else '#000000')
                     bottom[i] += val
         elif 'bar_total' in final_data.columns:
+            col_to_plot = 'bar_total'
             for i in range(len(final_data)):
-                val = final_data['bar_total'].iloc[i]
+                val = final_data[col_to_plot].iloc[i]
                 ax1.bar(x_pos[i], val, 0.8, color=SINGLE_BAR_COLOR, edgecolor='none', linewidth=0)
                 if val > 0:
                     label_text = str(int(val)) if bar_val_col == "Row Count" else format_currency(val)
@@ -224,8 +225,7 @@ def generate_chart(final_data, bar_val_col, cat_col, show_bars, show_line, title
         valid_line_cols = [c for c in line_cols if c in final_data.columns]
         
         if valid_line_cols:
-            # Use same .loc safety here just in case
-            l_max = final_data.loc[:, valid_line_cols].values.max()
+            l_max = final_data[valid_line_cols].values.max()
             l_max = l_max if l_max > 0 else 1
             for idx, l_col in enumerate(valid_line_cols):
                 lc = SPLIT_LINE_PALETTE[idx % len(SPLIT_LINE_PALETTE)] if line_cat_col != 'None' else DEFAULT_LINE_COLOR
